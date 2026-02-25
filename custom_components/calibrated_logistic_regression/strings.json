@@ -18,9 +18,8 @@
       },
       "states": {
         "title": "Feature States",
-        "description": "Provide current states for each selected entity. Optional threshold controls decision cutoff. Example: {states_example}",
+        "description": "Provide current states for each selected entity using the fields below. Selected features: {states_help}",
         "data": {
-          "feature_states": "Feature states JSON",
           "threshold": "Decision threshold (%)"
         }
       },
@@ -33,8 +32,6 @@
       }
     },
     "error": {
-      "invalid_feature_states": "Feature states must be JSON object of entity_id to current state.",
-      "missing_feature_states": "Provide a state for every selected feature.",
       "invalid_state_mappings": "State mappings must be JSON object of entity_id to state-to-number mapping.",
       "required": "This field is required."
     },

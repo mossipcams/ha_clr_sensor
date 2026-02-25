@@ -28,10 +28,10 @@ def test_mappings_schema_contains_state_mappings() -> None:
     assert "state_mappings" in keys
 
 
-def test_states_schema_contains_feature_states_and_threshold() -> None:
-    schema = _build_states_schema('{"sensor.a": "22"}', 50.0)
+def test_states_schema_contains_feature_fields_and_threshold() -> None:
+    schema = _build_states_schema(["sensor.a"], {"sensor.a": "22"}, 50.0)
     keys = [str(k.schema) for k in schema.schema]
-    assert "feature_states" in keys
+    assert "sensor.a" in keys
     assert "threshold" in keys
 
 

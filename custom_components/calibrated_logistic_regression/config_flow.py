@@ -80,13 +80,17 @@ def _build_mappings_schema(default_mappings: str) -> vol.Schema:
     )
 
 
-def _build_states_schema(default_states: str, default_threshold: float) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(CONF_FEATURE_STATES, default=default_states): str,
-            vol.Optional(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
-        }
-    )
+def _build_states_schema(
+    required_features: list[str],
+    default_states: dict[str, str],
+    default_threshold: float,
+) -> vol.Schema:
+    schema: dict[Any, Any] = {
+        vol.Optional(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
+    }
+    for feature in required_features:
+        schema[vol.Required(feature, default=default_states.get(feature, ""))] = str
+    return vol.Schema(schema)
 
 
 def _build_preview_schema() -> vol.Schema:
@@ -104,23 +108,6 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
 
     def __init__(self) -> None:
         self._draft: dict[str, Any] = {}
-
-    @staticmethod
-    def _parse_feature_states(raw: str) -> dict[str, str] | None:
-        """Parse user-provided feature states from JSON."""
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            return None
-        if not isinstance(parsed, dict):
-            return None
-
-        states: dict[str, str] = {}
-        for entity_id, state in parsed.items():
-            if not isinstance(entity_id, str) or not entity_id.strip():
-                return None
-            states[entity_id.strip()] = str(state)
-        return states
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         """Collect integration name and goal."""
@@ -183,13 +170,13 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         required_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
 
         if user_input is not None:
-            feature_states = self._parse_feature_states(str(user_input.get(CONF_FEATURE_STATES, "")))
-            if feature_states is None:
-                errors[CONF_FEATURE_STATES] = "invalid_feature_states"
-            else:
-                missing_states = [feature for feature in required_features if feature not in feature_states]
-                if missing_states:
-                    errors[CONF_FEATURE_STATES] = "missing_feature_states"
+            feature_states: dict[str, str] = {}
+            for feature in required_features:
+                raw_value = user_input.get(feature)
+                if raw_value is None or str(raw_value).strip() == "":
+                    errors[feature] = "required"
+                    continue
+                feature_states[feature] = str(raw_value)
             if not errors:
                 self._draft[CONF_FEATURE_STATES] = {
                     feature: feature_states[feature]
@@ -225,14 +212,14 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 self._draft[CONF_CALIBRATION_INTERCEPT] = DEFAULT_CALIBRATION_INTERCEPT
                 return await self.async_step_preview()
 
-        default_states = json.dumps(self._draft.get(CONF_FEATURE_STATES, {}))
+        default_states = dict(self._draft.get(CONF_FEATURE_STATES, {}))
         default_threshold = float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
         return self.async_show_form(
             step_id="states",
-            data_schema=_build_states_schema(default_states, default_threshold),
+            data_schema=_build_states_schema(required_features, default_states, default_threshold),
             errors=errors,
             description_placeholders={
-                "states_example": '{"sensor.temp": "22.5", "binary_sensor.window": "on"}',
+                "states_help": ", ".join(required_features),
             },
         )
 

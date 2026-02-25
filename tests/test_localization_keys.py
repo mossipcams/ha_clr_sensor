@@ -15,8 +15,7 @@ def test_strings_contains_wizard_and_options_labels() -> None:
     assert "preview" in config_steps
 
     errors = strings["config"]["error"]
-    assert "missing_feature_states" in errors
-    assert "invalid_feature_states" in errors
+    assert "required" in errors
 
     options_steps = strings["options"]["step"]
     assert "features" in options_steps

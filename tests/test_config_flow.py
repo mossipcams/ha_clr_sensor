@@ -39,7 +39,8 @@ def test_wizard_happy_path_creates_entry_from_entities_states_and_threshold() ->
     states_result = asyncio.run(
         flow.async_step_states(
             {
-                "feature_states": '{"sensor.a": "22.5", "binary_sensor.window": "on"}',
+                "sensor.a": "22.5",
+                "binary_sensor.window": "on",
                 "threshold": 65.0,
             }
         )
@@ -93,14 +94,14 @@ def test_states_step_requires_all_feature_states_from_user_input() -> None:
     result = asyncio.run(
         flow.async_step_states(
             {
-                "feature_states": '{"sensor.a": "22.5"}',
+                "sensor.a": "22.5",
                 "threshold": 50.0,
             }
         )
     )
 
     assert result["type"] == "form"
-    assert result["errors"]["feature_states"] == "missing_feature_states"
+    assert result["errors"]["sensor.b"] == "required"
 
 
 def test_states_step_infers_types_and_fallback_mapping_from_user_provided_states() -> None:
@@ -111,7 +112,7 @@ def test_states_step_infers_types_and_fallback_mapping_from_user_provided_states
     result = asyncio.run(
         flow.async_step_states(
             {
-                "feature_states": '{"sensor.status_text": "mystery"}',
+                "sensor.status_text": "mystery",
                 "threshold": 50.0,
             }
         )
