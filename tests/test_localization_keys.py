@@ -22,4 +22,5 @@ def test_strings_contains_wizard_and_options_labels() -> None:
     assert "mappings" in options_steps
     assert "threshold" in options_steps
     assert "calibration" in options_steps
+    assert "model" in options_steps
     assert "diagnostics" in options_steps

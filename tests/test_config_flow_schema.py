@@ -14,6 +14,8 @@ def test_user_schema_contains_name_and_goal() -> None:
     keys = [str(k.schema) for k in schema.schema]
     assert "name" in keys
     assert "goal" in keys
+    assert "ml_db_path" in keys
+    assert "ml_artifact_view" in keys
 
 
 def test_features_schema_contains_required_features() -> None:

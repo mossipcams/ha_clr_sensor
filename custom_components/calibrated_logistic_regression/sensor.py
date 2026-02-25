@@ -17,13 +17,17 @@ from .const import (
     CONF_COEFFICIENTS,
     CONF_FEATURE_TYPES,
     CONF_INTERCEPT,
+    CONF_ML_ARTIFACT_VIEW,
+    CONF_ML_DB_PATH,
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
     CONF_THRESHOLD,
+    DEFAULT_ML_ARTIFACT_VIEW,
     DEFAULT_THRESHOLD,
 )
 from .feature_mapping import FEATURE_TYPE_CATEGORICAL, infer_state_mappings_from_states
+from .ml_artifact import load_latest_clr_model_artifact
 from .model import calibrated_probability, logistic_probability, parse_float
 
 
@@ -56,10 +60,38 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             entity_id: float(weight)
             for entity_id, weight in dict(config.get(CONF_COEFFICIENTS, {})).items()
         }
+        self._ml_db_path = str(config.get(CONF_ML_DB_PATH, "")).strip()
+        self._ml_artifact_view = str(
+            config.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
+        ).strip() or DEFAULT_ML_ARTIFACT_VIEW
+        self._model_source = "manual"
+        self._model_artifact_error: str | None = None
+        self._model_artifact_meta: dict[str, Any] = {}
+        if self._ml_db_path:
+            try:
+                artifact = load_latest_clr_model_artifact(
+                    db_path=self._ml_db_path,
+                    artifact_view=self._ml_artifact_view,
+                )
+                self._intercept = artifact.intercept
+                self._coefficients = dict(artifact.coefficients)
+                self._model_source = "ml_data_layer"
+                self._model_artifact_meta = {
+                    "model_type": artifact.model_type,
+                    "feature_set_version": artifact.feature_set_version,
+                    "created_at_utc": artifact.created_at_utc,
+                    "artifact_view": self._ml_artifact_view,
+                    "db_path": self._ml_db_path,
+                }
+            except Exception as exc:  # pragma: no cover - runtime fallback
+                self._model_artifact_error = str(exc)
+
         default_required = list(self._coefficients.keys())
         self._required_features: list[str] = list(
             config.get(CONF_REQUIRED_FEATURES, default_required)
         )
+        if self._model_source == "ml_data_layer":
+            self._required_features = list(self._coefficients.keys())
         self._feature_types: dict[str, str] = {
             feature_id: str(feature_type).strip().casefold()
             for feature_id, feature_type in dict(
@@ -146,6 +178,9 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             "decision_threshold": self._threshold,
             "is_above_threshold": self._is_above_threshold,
             "decision": self._decision,
+            "model_source": self._model_source,
+            "model_artifact_error": self._model_artifact_error,
+            "model_artifact_meta": dict(self._model_artifact_meta),
         }
 
     def _encoded_feature_value(self, entity_id: str, raw_state: str) -> tuple[float | None, str | None]:

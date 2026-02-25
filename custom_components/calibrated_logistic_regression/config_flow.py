@@ -18,6 +18,8 @@ from .const import (
     CONF_FEATURE_STATES,
     CONF_GOAL,
     CONF_INTERCEPT,
+    CONF_ML_ARTIFACT_VIEW,
+    CONF_ML_DB_PATH,
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
@@ -25,6 +27,7 @@ from .const import (
     DEFAULT_CALIBRATION_INTERCEPT,
     DEFAULT_CALIBRATION_SLOPE,
     DEFAULT_GOAL,
+    DEFAULT_ML_ARTIFACT_VIEW,
     DEFAULT_THRESHOLD,
     DOMAIN,
 )
@@ -58,6 +61,8 @@ def _build_user_schema() -> vol.Schema:
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
+            vol.Optional(CONF_ML_DB_PATH, default=""): str,
+            vol.Optional(CONF_ML_ARTIFACT_VIEW, default=DEFAULT_ML_ARTIFACT_VIEW): str,
         }
     )
 
@@ -126,6 +131,15 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                         return self.async_abort(reason="already_configured")
                 self._draft[CONF_NAME] = name
                 self._draft[CONF_GOAL] = goal
+                ml_db_path = str(user_input.get(CONF_ML_DB_PATH, "")).strip()
+                ml_artifact_view = str(
+                    user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
+                ).strip()
+                if ml_db_path:
+                    self._draft[CONF_ML_DB_PATH] = ml_db_path
+                    self._draft[CONF_ML_ARTIFACT_VIEW] = (
+                        ml_artifact_view or DEFAULT_ML_ARTIFACT_VIEW
+                    )
                 return await self.async_step_features()
 
         return self.async_show_form(
@@ -243,6 +257,10 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                     CONF_COEFFICIENTS: self._draft[CONF_COEFFICIENTS],
                     CONF_CALIBRATION_SLOPE: self._draft[CONF_CALIBRATION_SLOPE],
                     CONF_CALIBRATION_INTERCEPT: self._draft[CONF_CALIBRATION_INTERCEPT],
+                    CONF_ML_DB_PATH: self._draft.get(CONF_ML_DB_PATH, ""),
+                    CONF_ML_ARTIFACT_VIEW: self._draft.get(
+                        CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW
+                    ),
                 },
             )
 
@@ -274,7 +292,42 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         """Show management sections."""
         return self.async_show_menu(
             step_id="init",
-            menu_options=["features", "mappings", "threshold", "calibration", "diagnostics"],
+            menu_options=["features", "mappings", "threshold", "calibration", "model", "diagnostics"],
+        )
+
+    async def async_step_model(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Manage external ML artifact source settings."""
+        if user_input is not None:
+            return self.async_create_entry(
+                title="",
+                data={
+                    CONF_ML_DB_PATH: str(user_input.get(CONF_ML_DB_PATH, "")).strip(),
+                    CONF_ML_ARTIFACT_VIEW: str(
+                        user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
+                    ).strip()
+                    or DEFAULT_ML_ARTIFACT_VIEW,
+                },
+            )
+
+        default_db_path = self._config_entry.options.get(
+            CONF_ML_DB_PATH,
+            self._config_entry.data.get(CONF_ML_DB_PATH, ""),
+        )
+        default_view = self._config_entry.options.get(
+            CONF_ML_ARTIFACT_VIEW,
+            self._config_entry.data.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW),
+        )
+        return self.async_show_form(
+            step_id="model",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(CONF_ML_DB_PATH, default=default_db_path): str,
+                    vol.Required(CONF_ML_ARTIFACT_VIEW, default=default_view): str,
+                }
+            ),
         )
 
     async def async_step_features(

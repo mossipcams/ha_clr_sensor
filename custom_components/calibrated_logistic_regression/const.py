@@ -16,6 +16,9 @@ CONF_FEATURE_STATES = "feature_states"
 CONF_THRESHOLD = "threshold"
 CONF_CALIBRATION_SLOPE = "calibration_slope"
 CONF_CALIBRATION_INTERCEPT = "calibration_intercept"
+CONF_ML_DB_PATH = "ml_db_path"
+CONF_ML_ARTIFACT_VIEW = "ml_artifact_view"
+DEFAULT_ML_ARTIFACT_VIEW = "vw_clr_latest_model_artifact"
 
 DEFAULT_GOAL = "risk"
 DEFAULT_THRESHOLD = 50.0

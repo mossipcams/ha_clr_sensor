@@ -6,7 +6,9 @@
         "description": "Name the sensor and choose probability goal. Available goals: {goal_options}.",
         "data": {
           "name": "Name",
-          "goal": "Probability goal"
+          "goal": "Probability goal",
+          "ml_db_path": "ML DB path (optional)",
+          "ml_artifact_view": "ML artifact view"
         }
       },
       "features": {
@@ -67,6 +69,13 @@
         "title": "Manage Threshold",
         "data": {
           "threshold": "Decision threshold (%)"
+        }
+      },
+      "model": {
+        "title": "Manage ML Model Source",
+        "data": {
+          "ml_db_path": "ML DB path (optional)",
+          "ml_artifact_view": "ML artifact view"
         }
       },
       "diagnostics": {

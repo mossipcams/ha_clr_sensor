@@ -7,6 +7,7 @@ from unittest.mock import MagicMock
 from homeassistant.core import State
 
 from custom_components.calibrated_logistic_regression.const import DOMAIN
+from custom_components.calibrated_logistic_regression.ml_artifact import ClrModelArtifact
 from custom_components.calibrated_logistic_regression.sensor import (
     CalibratedLogisticRegressionSensor,
     async_setup_entry,
@@ -179,3 +180,35 @@ def test_sensor_marks_negative_when_probability_below_threshold() -> None:
     assert attrs["decision_threshold"] == 90.0
     assert attrs["is_above_threshold"] is False
     assert attrs["decision"] == "negative"
+
+
+def test_sensor_can_load_model_from_ml_data_layer(monkeypatch) -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "sensor.a": State("sensor.a", "2"),
+        "sensor.b": State("sensor.b", "1"),
+    }.get(entity_id)
+
+    entry = _build_entry()
+    entry.data["ml_db_path"] = "/tmp/ha_ml_data_layer.db"
+    entry.data["ml_artifact_view"] = "vw_clr_latest_model_artifact"
+
+    monkeypatch.setattr(
+        "custom_components.calibrated_logistic_regression.sensor.load_latest_clr_model_artifact",
+        lambda db_path, artifact_view: ClrModelArtifact(
+            intercept=-1.0,
+            coefficients={"sensor.a": 1.0, "sensor.b": 0.0},
+            feature_names=["sensor.a", "sensor.b"],
+            model_type="sklearn_logistic_regression",
+            feature_set_version="v1",
+            created_at_utc="2026-02-25T00:00:00+00:00",
+        ),
+    )
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor._recompute_state(datetime.now())
+
+    attrs = sensor.extra_state_attributes
+    assert attrs["model_source"] == "ml_data_layer"
+    assert attrs["model_artifact_error"] is None
+    assert sensor.available is True
