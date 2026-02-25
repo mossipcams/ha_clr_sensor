@@ -20,6 +20,8 @@ from .const import (
     CONF_INTERCEPT,
     CONF_ML_ARTIFACT_VIEW,
     CONF_ML_DB_PATH,
+    CONF_ML_FEATURE_SOURCE,
+    CONF_ML_FEATURE_VIEW,
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
@@ -28,6 +30,8 @@ from .const import (
     DEFAULT_CALIBRATION_SLOPE,
     DEFAULT_GOAL,
     DEFAULT_ML_ARTIFACT_VIEW,
+    DEFAULT_ML_FEATURE_SOURCE,
+    DEFAULT_ML_FEATURE_VIEW,
     DEFAULT_THRESHOLD,
     DOMAIN,
 )
@@ -63,6 +67,25 @@ def _build_user_schema() -> vol.Schema:
             ),
             vol.Optional(CONF_ML_DB_PATH, default=""): str,
             vol.Optional(CONF_ML_ARTIFACT_VIEW, default=DEFAULT_ML_ARTIFACT_VIEW): str,
+            vol.Optional(
+                CONF_ML_FEATURE_SOURCE,
+                default=DEFAULT_ML_FEATURE_SOURCE,
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(
+                            value="hass_state",
+                            label="Home Assistant States",
+                        ),
+                        selector.SelectOptionDict(
+                            value="ml_snapshot",
+                            label="ML Snapshot View",
+                        ),
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+            vol.Optional(CONF_ML_FEATURE_VIEW, default=DEFAULT_ML_FEATURE_VIEW): str,
         }
     )
 
@@ -135,11 +158,19 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 ml_artifact_view = str(
                     user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
                 ).strip()
+                ml_feature_source = str(
+                    user_input.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
+                ).strip() or DEFAULT_ML_FEATURE_SOURCE
+                ml_feature_view = str(
+                    user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
+                ).strip() or DEFAULT_ML_FEATURE_VIEW
                 if ml_db_path:
                     self._draft[CONF_ML_DB_PATH] = ml_db_path
                     self._draft[CONF_ML_ARTIFACT_VIEW] = (
                         ml_artifact_view or DEFAULT_ML_ARTIFACT_VIEW
                     )
+                self._draft[CONF_ML_FEATURE_SOURCE] = ml_feature_source
+                self._draft[CONF_ML_FEATURE_VIEW] = ml_feature_view
                 return await self.async_step_features()
 
         return self.async_show_form(
@@ -261,6 +292,12 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                     CONF_ML_ARTIFACT_VIEW: self._draft.get(
                         CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW
                     ),
+                    CONF_ML_FEATURE_SOURCE: self._draft.get(
+                        CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE
+                    ),
+                    CONF_ML_FEATURE_VIEW: self._draft.get(
+                        CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW
+                    ),
                 },
             )
 
@@ -309,6 +346,14 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                         user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
                     ).strip()
                     or DEFAULT_ML_ARTIFACT_VIEW,
+                    CONF_ML_FEATURE_SOURCE: str(
+                        user_input.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
+                    ).strip()
+                    or DEFAULT_ML_FEATURE_SOURCE,
+                    CONF_ML_FEATURE_VIEW: str(
+                        user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
+                    ).strip()
+                    or DEFAULT_ML_FEATURE_VIEW,
                 },
             )
 
@@ -320,12 +365,38 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             CONF_ML_ARTIFACT_VIEW,
             self._config_entry.data.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW),
         )
+        default_feature_source = self._config_entry.options.get(
+            CONF_ML_FEATURE_SOURCE,
+            self._config_entry.data.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE),
+        )
+        default_feature_view = self._config_entry.options.get(
+            CONF_ML_FEATURE_VIEW,
+            self._config_entry.data.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW),
+        )
         return self.async_show_form(
             step_id="model",
             data_schema=vol.Schema(
                 {
                     vol.Optional(CONF_ML_DB_PATH, default=default_db_path): str,
                     vol.Required(CONF_ML_ARTIFACT_VIEW, default=default_view): str,
+                    vol.Required(
+                        CONF_ML_FEATURE_SOURCE, default=default_feature_source
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(
+                                    value="hass_state",
+                                    label="Home Assistant States",
+                                ),
+                                selector.SelectOptionDict(
+                                    value="ml_snapshot",
+                                    label="ML Snapshot View",
+                                ),
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Required(CONF_ML_FEATURE_VIEW, default=default_feature_view): str,
                 }
             ),
         )

@@ -19,16 +19,23 @@ from .const import (
     CONF_INTERCEPT,
     CONF_ML_ARTIFACT_VIEW,
     CONF_ML_DB_PATH,
+    CONF_ML_FEATURE_SOURCE,
+    CONF_ML_FEATURE_VIEW,
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
     CONF_THRESHOLD,
     DEFAULT_ML_ARTIFACT_VIEW,
+    DEFAULT_ML_FEATURE_SOURCE,
+    DEFAULT_ML_FEATURE_VIEW,
     DEFAULT_THRESHOLD,
 )
-from .feature_mapping import FEATURE_TYPE_CATEGORICAL, infer_state_mappings_from_states
-from .ml_artifact import load_latest_clr_model_artifact
-from .model import calibrated_probability, logistic_probability, parse_float
+from .feature_provider import (
+    HassStateFeatureProvider,
+    SqliteSnapshotFeatureProvider,
+)
+from .inference import CalibrationSpec, ModelSpec, run_inference
+from .model_provider import ManualModelProvider, SqliteArtifactModelProvider
 
 
 async def async_setup_entry(
@@ -55,8 +62,8 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         config.update(entry.options)
 
         self._name = str(config.get(CONF_NAME, entry.title or "CLR Probability"))
-        self._intercept = float(config.get(CONF_INTERCEPT, 0.0))
-        self._coefficients: dict[str, float] = {
+        manual_intercept = float(config.get(CONF_INTERCEPT, 0.0))
+        manual_coefficients: dict[str, float] = {
             entity_id: float(weight)
             for entity_id, weight in dict(config.get(CONF_COEFFICIENTS, {})).items()
         }
@@ -64,34 +71,38 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         self._ml_artifact_view = str(
             config.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
         ).strip() or DEFAULT_ML_ARTIFACT_VIEW
-        self._model_source = "manual"
-        self._model_artifact_error: str | None = None
-        self._model_artifact_meta: dict[str, Any] = {}
-        if self._ml_db_path:
-            try:
-                artifact = load_latest_clr_model_artifact(
-                    db_path=self._ml_db_path,
-                    artifact_view=self._ml_artifact_view,
-                )
-                self._intercept = artifact.intercept
-                self._coefficients = dict(artifact.coefficients)
-                self._model_source = "ml_data_layer"
-                self._model_artifact_meta = {
-                    "model_type": artifact.model_type,
-                    "feature_set_version": artifact.feature_set_version,
-                    "created_at_utc": artifact.created_at_utc,
-                    "artifact_view": self._ml_artifact_view,
-                    "db_path": self._ml_db_path,
-                }
-            except Exception as exc:  # pragma: no cover - runtime fallback
-                self._model_artifact_error = str(exc)
+        self._ml_feature_source = str(
+            config.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
+        ).strip() or DEFAULT_ML_FEATURE_SOURCE
+        self._ml_feature_view = str(
+            config.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
+        ).strip() or DEFAULT_ML_FEATURE_VIEW
 
-        default_required = list(self._coefficients.keys())
+        model_provider = ManualModelProvider(
+            intercept=manual_intercept,
+            coefficients=manual_coefficients,
+        )
+        if self._ml_db_path:
+            model_provider = SqliteArtifactModelProvider(
+                db_path=self._ml_db_path,
+                artifact_view=self._ml_artifact_view,
+                fallback_intercept=manual_intercept,
+                fallback_coefficients=manual_coefficients,
+            )
+
+        model_result = model_provider.load()
+        self._model: ModelSpec = model_result.model
+        self._model_source = model_result.source
+        self._model_artifact_error = model_result.artifact_error
+        self._model_artifact_meta: dict[str, Any] = dict(model_result.artifact_meta)
+
+        default_required = list(self._model.coefficients.keys())
         self._required_features: list[str] = list(
             config.get(CONF_REQUIRED_FEATURES, default_required)
         )
         if self._model_source == "ml_data_layer":
-            self._required_features = list(self._coefficients.keys())
+            self._required_features = list(self._model.coefficients.keys())
+
         self._feature_types: dict[str, str] = {
             feature_id: str(feature_type).strip().casefold()
             for feature_id, feature_type in dict(
@@ -108,14 +119,32 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
                 for state_name, encoded in states.items()
             }
 
-        self._calibration_slope = float(config.get(CONF_CALIBRATION_SLOPE, 1.0))
-        self._calibration_intercept = float(config.get(CONF_CALIBRATION_INTERCEPT, 0.0))
+        self._calibration = CalibrationSpec(
+            slope=float(config.get(CONF_CALIBRATION_SLOPE, 1.0)),
+            intercept=float(config.get(CONF_CALIBRATION_INTERCEPT, 0.0)),
+        )
         self._threshold = float(config.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
+
+        if self._ml_feature_source == "ml_snapshot" and self._ml_db_path:
+            self._feature_provider = SqliteSnapshotFeatureProvider(
+                db_path=self._ml_db_path,
+                snapshot_view=self._ml_feature_view,
+                required_features=self._required_features,
+            )
+        else:
+            self._ml_feature_source = "hass_state"
+            self._feature_provider = HassStateFeatureProvider(
+                hass=self.hass,
+                required_features=self._required_features,
+                feature_types=self._feature_types,
+                state_mappings=self._state_mappings,
+            )
 
         self._attr_name = self._name
         self._attr_unique_id = f"{entry.entry_id}_calibrated_probability"
         self._attr_native_unit_of_measurement = "%"
         self._attr_suggested_display_precision = 2
+        self._attr_should_poll = self._ml_feature_source == "ml_snapshot"
 
         self._available = False
         self._native_value: float | None = None
@@ -125,6 +154,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         self._feature_values: dict[str, float] = {}
         self._feature_contributions: dict[str, float] = {}
         self._mapped_state_values: dict[str, str] = {}
+        self._feature_provider_error: str | None = None
         self._unavailable_reason: str | None = None
         self._last_computed_at: str | None = None
         self._is_above_threshold: bool | None = None
@@ -133,20 +163,27 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Subscribe to source entity updates."""
         await super().async_added_to_hass()
-        watched_entities = list(dict.fromkeys(self._required_features))
+        if self._ml_feature_source == "hass_state":
+            watched_entities = list(dict.fromkeys(self._required_features))
 
-        @callback
-        def _handle_state_change(event: Event) -> None:
-            self._recompute_state(datetime.now(UTC))
-            self.async_write_ha_state()
+            @callback
+            def _handle_state_change(event: Event) -> None:
+                del event
+                self._recompute_state(datetime.now(UTC))
+                self.async_write_ha_state()
 
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass,
-                watched_entities,
-                _handle_state_change,
+            self.async_on_remove(
+                async_track_state_change_event(
+                    self.hass,
+                    watched_entities,
+                    _handle_state_change,
+                )
             )
-        )
+
+        self._recompute_state(datetime.now(UTC))
+
+    async def async_update(self) -> None:
+        """Refresh state when polling is enabled."""
         self._recompute_state(datetime.now(UTC))
 
     @property
@@ -174,6 +211,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
                 entity_id: dict(states) for entity_id, states in self._state_mappings.items()
             },
             "unavailable_reason": self._unavailable_reason,
+            "feature_provider_error": self._feature_provider_error,
             "last_computed_at": self._last_computed_at,
             "decision_threshold": self._threshold,
             "is_above_threshold": self._is_above_threshold,
@@ -181,86 +219,48 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             "model_source": self._model_source,
             "model_artifact_error": self._model_artifact_error,
             "model_artifact_meta": dict(self._model_artifact_meta),
+            "feature_source": self._ml_feature_source,
+            "feature_view": self._ml_feature_view,
         }
-
-    def _encoded_feature_value(self, entity_id: str, raw_state: str) -> tuple[float | None, str | None]:
-        """Return numeric value for a source feature, with optional categorical mapping."""
-        parsed = parse_float(raw_state)
-        if parsed is not None:
-            return parsed, None
-
-        feature_type = self._feature_types.get(entity_id, "numeric")
-        if feature_type != FEATURE_TYPE_CATEGORICAL:
-            return None, None
-
-        normalized_state = raw_state.casefold()
-        entity_mapping = self._state_mappings.get(entity_id, {})
-        encoded = entity_mapping.get(normalized_state)
-        if encoded is not None:
-            return encoded, raw_state
-
-        inferred = infer_state_mappings_from_states({entity_id: raw_state})
-        inferred_mapping = inferred.get(entity_id, {})
-        inferred_encoded = inferred_mapping.get(normalized_state)
-        if inferred_encoded is None:
-            return None, None
-        return inferred_encoded, raw_state
 
     def _recompute_state(self, now: datetime) -> None:
         """Recompute probability from current source states."""
-        feature_values: dict[str, float] = {}
-        missing: list[str] = []
-        mapped_state_values: dict[str, str] = {}
-
-        for entity_id in self._required_features:
-            state = self.hass.states.get(entity_id)
-            if state is None:
-                missing.append(entity_id)
-                continue
-
-            encoded, mapped_from = self._encoded_feature_value(entity_id, state.state)
-            if encoded is None:
-                missing.append(entity_id)
-                continue
-            feature_values[entity_id] = encoded
-            if mapped_from is not None:
-                mapped_state_values[entity_id] = mapped_from
-
-        self._feature_values = feature_values
-        self._mapped_state_values = mapped_state_values
-        self._missing_features = missing
-        self._last_computed_at = now.astimezone(UTC).isoformat()
-
-        if missing:
+        try:
+            feature_vector = self._feature_provider.load()
+            self._feature_provider_error = None
+        except Exception as exc:  # pragma: no cover - runtime fallback guard
+            self._feature_values = {}
+            self._mapped_state_values = {}
+            self._missing_features = list(self._required_features)
+            self._last_computed_at = now.astimezone(UTC).isoformat()
+            self._feature_provider_error = str(exc)
             self._available = False
             self._native_value = None
             self._raw_probability = None
             self._linear_score = None
             self._feature_contributions = {}
-            self._unavailable_reason = "missing_or_unmapped_features"
+            self._unavailable_reason = "feature_source_error"
             self._is_above_threshold = None
             self._decision = None
             return
 
-        raw_probability, linear_score = logistic_probability(
-            features=feature_values,
-            coefficients=self._coefficients,
-            intercept=self._intercept,
-        )
-        calibrated = calibrated_probability(
-            base_probability=raw_probability,
-            calibration_slope=self._calibration_slope,
-            calibration_intercept=self._calibration_intercept,
-        )
+        self._feature_values = dict(feature_vector.feature_values)
+        self._mapped_state_values = dict(feature_vector.mapped_state_values)
+        self._missing_features = list(feature_vector.missing_features)
+        self._last_computed_at = now.astimezone(UTC).isoformat()
 
-        self._available = True
-        self._raw_probability = raw_probability
-        self._linear_score = linear_score
-        self._native_value = calibrated * 100.0
-        self._feature_contributions = {
-            feature_id: self._coefficients.get(feature_id, 0.0) * value
-            for feature_id, value in feature_values.items()
-        }
-        self._unavailable_reason = None
-        self._is_above_threshold = self._native_value >= self._threshold
-        self._decision = "positive" if self._is_above_threshold else "negative"
+        result = run_inference(
+            feature_values=self._feature_values,
+            missing_features=self._missing_features,
+            model=self._model,
+            calibration=self._calibration,
+            threshold=self._threshold,
+        )
+        self._available = result.available
+        self._native_value = result.native_value
+        self._raw_probability = result.raw_probability
+        self._linear_score = result.linear_score
+        self._feature_contributions = dict(result.feature_contributions)
+        self._unavailable_reason = result.unavailable_reason
+        self._is_above_threshold = result.is_above_threshold
+        self._decision = result.decision

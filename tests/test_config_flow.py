@@ -64,6 +64,8 @@ def test_wizard_happy_path_creates_entry_from_entities_states_and_threshold() ->
     assert preview_result["data"]["threshold"] == 65.0
     assert preview_result["data"]["ml_db_path"] == ""
     assert preview_result["data"]["ml_artifact_view"] == "vw_clr_latest_model_artifact"
+    assert preview_result["data"]["ml_feature_source"] == "hass_state"
+    assert preview_result["data"]["ml_feature_view"] == "vw_latest_feature_snapshot"
 
 
 def test_user_step_aborts_duplicate_name() -> None:

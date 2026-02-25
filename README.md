@@ -58,6 +58,27 @@ Open the integration options and choose:
 - `unavailable_reason`
 - `last_computed_at`
 
+## Architecture (Refactor)
+
+The runtime pipeline is now split into three layers:
+
+- `model_provider`: loads coefficients/intercept from manual config or ML artifact contract view.
+- `feature_provider`: builds the feature vector from either live HA states or ML latest-feature snapshot view.
+- `inference`: pure probability/decision math (logistic + calibration + threshold).
+
+This separation keeps the sensor entity focused on orchestration and makes it easier to evolve with `ha_ml_data_layer` contract changes.
+
+### ML Contract Mode
+
+When configured with:
+
+- `ml_db_path`
+- `ml_artifact_view` (default: `vw_clr_latest_model_artifact`)
+- `ml_feature_source = ml_snapshot`
+- `ml_feature_view` (default: `vw_latest_feature_snapshot`)
+
+the sensor can pull both model artifacts and runtime features from the ML data-layer SQLite contract views.
+
 ## Setup Guidance
 
 - Goal options are selectable in the wizard: `risk`, `event_probability`, `success_probability`.

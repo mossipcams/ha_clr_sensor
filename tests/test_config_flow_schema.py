@@ -16,6 +16,8 @@ def test_user_schema_contains_name_and_goal() -> None:
     assert "goal" in keys
     assert "ml_db_path" in keys
     assert "ml_artifact_view" in keys
+    assert "ml_feature_source" in keys
+    assert "ml_feature_view" in keys
 
 
 def test_features_schema_contains_required_features() -> None:
