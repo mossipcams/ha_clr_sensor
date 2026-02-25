@@ -25,6 +25,7 @@ def _build_entry() -> MagicMock:
         "feature_types": {"sensor.a": "numeric", "sensor.b": "numeric"},
         "calibration_slope": 1.2,
         "calibration_intercept": -0.05,
+        "threshold": 50.0,
         "required_features": ["sensor.a", "sensor.b"],
         "state_mappings": {},
     }
@@ -57,6 +58,9 @@ def test_sensor_unavailable_reason_when_required_feature_missing() -> None:
     attrs = sensor.extra_state_attributes
     assert attrs["missing_features"] == ["sensor.b"]
     assert attrs["unavailable_reason"] == "missing_or_unmapped_features"
+    assert attrs["decision_threshold"] == 50.0
+    assert attrs["is_above_threshold"] is None
+    assert attrs["decision"] is None
 
 
 def test_sensor_updates_probability_and_explainability_attributes() -> None:
@@ -80,6 +84,9 @@ def test_sensor_updates_probability_and_explainability_attributes() -> None:
     assert attrs["mapped_state_values"] == {}
     assert attrs["unavailable_reason"] is None
     assert attrs["last_computed_at"] is not None
+    assert attrs["decision_threshold"] == 50.0
+    assert attrs["is_above_threshold"] is True
+    assert attrs["decision"] == "positive"
 
 
 def test_sensor_uses_state_mapping_for_non_numeric_state() -> None:
@@ -139,3 +146,36 @@ def test_sensor_auto_maps_known_categorical_state_when_mapping_missing() -> None
 
     assert sensor.available is True
     assert sensor.extra_state_attributes["feature_values"]["binary_sensor.window"] == 0.0
+
+
+def test_sensor_marks_negative_when_probability_below_threshold() -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "sensor.a": State("sensor.a", "1"),
+    }.get(entity_id)
+
+    entry = MagicMock()
+    entry.entry_id = "entry-threshold"
+    entry.title = "Threshold Test"
+    entry.data = {
+        "name": "Threshold Test",
+        "goal": "risk",
+        "intercept": 0.0,
+        "coefficients": {"sensor.a": 1.0},
+        "feature_types": {"sensor.a": "numeric"},
+        "calibration_slope": 1.0,
+        "calibration_intercept": 0.0,
+        "threshold": 90.0,
+        "required_features": ["sensor.a"],
+        "state_mappings": {},
+    }
+    entry.options = {}
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor._recompute_state(datetime.now())
+
+    assert sensor.available is True
+    attrs = sensor.extra_state_attributes
+    assert attrs["decision_threshold"] == 90.0
+    assert attrs["is_above_threshold"] is False
+    assert attrs["decision"] == "negative"

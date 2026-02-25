@@ -3,8 +3,8 @@ from __future__ import annotations
 from custom_components.calibrated_logistic_regression.config_flow import (
     _build_features_schema,
     _build_mappings_schema,
-    _build_model_schema,
     _build_preview_schema,
+    _build_states_schema,
     _build_user_schema,
 )
 
@@ -28,13 +28,11 @@ def test_mappings_schema_contains_state_mappings() -> None:
     assert "state_mappings" in keys
 
 
-def test_model_schema_contains_coefficients_and_calibration() -> None:
-    schema = _build_model_schema('{"sensor.a": 1.0}')
+def test_states_schema_contains_feature_states_and_threshold() -> None:
+    schema = _build_states_schema('{"sensor.a": "22"}', 50.0)
     keys = [str(k.schema) for k in schema.schema]
-    assert "coefficients" in keys
-    assert "intercept" in keys
-    assert "calibration_slope" in keys
-    assert "calibration_intercept" in keys
+    assert "feature_states" in keys
+    assert "threshold" in keys
 
 
 def test_preview_schema_has_confirmation_toggle() -> None:

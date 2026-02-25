@@ -11,26 +11,17 @@
       },
       "features": {
         "title": "Select Features",
-        "description": "Choose entities used as model features. {features_help} Feature types and common mappings are inferred automatically.",
+        "description": "Choose entities used as model features. {features_help}",
         "data": {
           "required_features": "Required features"
         }
       },
-      "mappings": {
-        "title": "Categorical Mappings",
-        "description": "Review or override inferred mappings for categorical features. Example: {mapping_example}",
+      "states": {
+        "title": "Feature States",
+        "description": "Provide current states for each selected entity. Optional threshold controls decision cutoff. Example: {states_example}",
         "data": {
-          "state_mappings": "State mappings JSON"
-        }
-      },
-      "model": {
-        "title": "Model Parameters",
-        "description": "Provide model coefficients and calibration values. Example coefficients JSON: {coefficients_example}",
-        "data": {
-          "intercept": "Intercept",
-          "coefficients": "Coefficients JSON",
-          "calibration_slope": "Calibration slope",
-          "calibration_intercept": "Calibration intercept"
+          "feature_states": "Feature states JSON",
+          "threshold": "Decision threshold (%)"
         }
       },
       "preview": {
@@ -42,10 +33,9 @@
       }
     },
     "error": {
-      "invalid_coefficients": "Coefficients must be valid JSON object of entity_id to number.",
+      "invalid_feature_states": "Feature states must be JSON object of entity_id to current state.",
+      "missing_feature_states": "Provide a state for every selected feature.",
       "invalid_state_mappings": "State mappings must be JSON object of entity_id to state-to-number mapping.",
-      "missing_categorical_mappings": "Every categorical feature needs at least one state mapping.",
-      "coefficient_mismatch": "Coefficient keys must exactly match selected features.",
       "required": "This field is required."
     },
     "abort": {
@@ -74,6 +64,12 @@
         "data": {
           "calibration_slope": "Calibration slope",
           "calibration_intercept": "Calibration intercept"
+        }
+      },
+      "threshold": {
+        "title": "Manage Threshold",
+        "data": {
+          "threshold": "Decision threshold (%)"
         }
       },
       "diagnostics": {

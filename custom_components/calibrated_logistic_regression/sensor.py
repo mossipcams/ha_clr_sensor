@@ -20,6 +20,8 @@ from .const import (
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
+    CONF_THRESHOLD,
+    DEFAULT_THRESHOLD,
 )
 from .feature_mapping import FEATURE_TYPE_CATEGORICAL, infer_state_mappings_from_states
 from .model import calibrated_probability, logistic_probability, parse_float
@@ -76,6 +78,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
 
         self._calibration_slope = float(config.get(CONF_CALIBRATION_SLOPE, 1.0))
         self._calibration_intercept = float(config.get(CONF_CALIBRATION_INTERCEPT, 0.0))
+        self._threshold = float(config.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
 
         self._attr_name = self._name
         self._attr_unique_id = f"{entry.entry_id}_calibrated_probability"
@@ -92,6 +95,8 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         self._mapped_state_values: dict[str, str] = {}
         self._unavailable_reason: str | None = None
         self._last_computed_at: str | None = None
+        self._is_above_threshold: bool | None = None
+        self._decision: str | None = None
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to source entity updates."""
@@ -138,6 +143,9 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             },
             "unavailable_reason": self._unavailable_reason,
             "last_computed_at": self._last_computed_at,
+            "decision_threshold": self._threshold,
+            "is_above_threshold": self._is_above_threshold,
+            "decision": self._decision,
         }
 
     def _encoded_feature_value(self, entity_id: str, raw_state: str) -> tuple[float | None, str | None]:
@@ -195,6 +203,8 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             self._linear_score = None
             self._feature_contributions = {}
             self._unavailable_reason = "missing_or_unmapped_features"
+            self._is_above_threshold = None
+            self._decision = None
             return
 
         raw_probability, linear_score = logistic_probability(
@@ -217,3 +227,5 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             for feature_id, value in feature_values.items()
         }
         self._unavailable_reason = None
+        self._is_above_threshold = self._native_value >= self._threshold
+        self._decision = "positive" if self._is_above_threshold else "negative"
