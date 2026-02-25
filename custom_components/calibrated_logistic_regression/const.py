@@ -9,6 +9,7 @@ CONF_NAME = "name"
 CONF_INTERCEPT = "intercept"
 CONF_COEFFICIENTS = "coefficients"
 CONF_REQUIRED_FEATURES = "required_features"
+CONF_STATE_MAPPINGS = "state_mappings"
 CONF_CALIBRATION_SLOPE = "calibration_slope"
 CONF_CALIBRATION_INTERCEPT = "calibration_intercept"
 

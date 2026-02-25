@@ -9,6 +9,7 @@
           "intercept": "Intercept",
           "coefficients": "Coefficients JSON",
           "required_features": "Required features",
+          "state_mappings": "State mappings JSON",
           "calibration_slope": "Calibration slope",
           "calibration_intercept": "Calibration intercept"
         }
@@ -16,6 +17,7 @@
     },
     "error": {
       "invalid_coefficients": "Coefficients must be valid JSON object of entity_id to number.",
+      "invalid_state_mappings": "State mappings must be JSON object of entity_id to state-to-number mapping.",
       "required": "This field is required."
     },
     "abort": {
@@ -28,7 +30,8 @@
         "title": "Calibration Options",
         "data": {
           "calibration_slope": "Calibration slope",
-          "calibration_intercept": "Calibration intercept"
+          "calibration_intercept": "Calibration intercept",
+          "state_mappings": "State mappings JSON"
         }
       }
     }

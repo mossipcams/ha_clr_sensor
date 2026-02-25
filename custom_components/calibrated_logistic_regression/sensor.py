@@ -8,8 +8,8 @@ from typing import Any
 from homeassistant.components.sensor import SensorEntity, SensorStateClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.event import async_track_state_change_event
 
 from .const import (
     CONF_CALIBRATION_INTERCEPT,
@@ -18,6 +18,7 @@ from .const import (
     CONF_INTERCEPT,
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
+    CONF_STATE_MAPPINGS,
 )
 from .model import calibrated_probability, logistic_probability, parse_float
 
@@ -56,6 +57,16 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         self._required_features: list[str] = list(
             config.get(CONF_REQUIRED_FEATURES, default_required)
         )
+        self._state_mappings: dict[str, dict[str, float]] = {}
+        raw_mappings = dict(config.get(CONF_STATE_MAPPINGS, {}))
+        for entity_id, states in raw_mappings.items():
+            if not isinstance(states, dict):
+                continue
+            self._state_mappings[entity_id] = {
+                str(state_name).casefold(): float(encoded)
+                for state_name, encoded in states.items()
+            }
+
         self._calibration_slope = float(config.get(CONF_CALIBRATION_SLOPE, 1.0))
         self._calibration_intercept = float(config.get(CONF_CALIBRATION_INTERCEPT, 0.0))
 
@@ -109,7 +120,19 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
             "feature_values": dict(self._feature_values),
             "missing_features": list(self._missing_features),
             "required_features": list(self._required_features),
+            "state_mappings": {
+                entity_id: dict(states) for entity_id, states in self._state_mappings.items()
+            },
         }
+
+    def _encoded_feature_value(self, entity_id: str, raw_state: str) -> float | None:
+        """Return numeric value for a source feature, with optional categorical mapping."""
+        parsed = parse_float(raw_state)
+        if parsed is not None:
+            return parsed
+
+        entity_mapping = self._state_mappings.get(entity_id, {})
+        return entity_mapping.get(raw_state.casefold())
 
     def _recompute_state(self, now: datetime) -> None:
         """Recompute probability from current source states."""
@@ -123,11 +146,11 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
                 missing.append(entity_id)
                 continue
 
-            parsed = parse_float(state.state)
-            if parsed is None:
+            encoded = self._encoded_feature_value(entity_id, state.state)
+            if encoded is None:
                 missing.append(entity_id)
                 continue
-            feature_values[entity_id] = parsed
+            feature_values[entity_id] = encoded
 
         self._feature_values = feature_values
         self._missing_features = missing

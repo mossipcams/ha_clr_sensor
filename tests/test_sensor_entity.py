@@ -24,6 +24,7 @@ def _build_entry() -> MagicMock:
         "calibration_slope": 1.2,
         "calibration_intercept": -0.05,
         "required_features": ["sensor.a", "sensor.b"],
+        "state_mappings": {},
     }
     entry.options = {}
     return entry
@@ -73,3 +74,57 @@ def test_sensor_updates_probability_and_attributes() -> None:
     assert attrs["missing_features"] == []
     assert attrs["feature_values"]["sensor.a"] == 2.0
     assert attrs["feature_values"]["sensor.b"] == 1.0
+
+
+def test_sensor_uses_state_mapping_for_non_numeric_state() -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "binary_sensor.window": State("binary_sensor.window", "on"),
+    }.get(entity_id)
+
+    entry = MagicMock()
+    entry.entry_id = "entry-map"
+    entry.title = "Window Risk"
+    entry.data = {
+        "name": "Window Risk",
+        "intercept": 0.0,
+        "coefficients": {"binary_sensor.window": 1.0},
+        "calibration_slope": 1.0,
+        "calibration_intercept": 0.0,
+        "required_features": ["binary_sensor.window"],
+        "state_mappings": {"binary_sensor.window": {"on": 1, "off": 0}},
+    }
+    entry.options = {}
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor._recompute_state(datetime.now())
+
+    assert sensor.available is True
+    assert sensor.extra_state_attributes["feature_values"]["binary_sensor.window"] == 1.0
+
+
+def test_sensor_unavailable_when_non_numeric_and_no_mapping() -> None:
+    hass = MagicMock()
+    hass.states.get.side_effect = lambda entity_id: {
+        "binary_sensor.window": State("binary_sensor.window", "on"),
+    }.get(entity_id)
+
+    entry = MagicMock()
+    entry.entry_id = "entry-no-map"
+    entry.title = "Window Risk"
+    entry.data = {
+        "name": "Window Risk",
+        "intercept": 0.0,
+        "coefficients": {"binary_sensor.window": 1.0},
+        "calibration_slope": 1.0,
+        "calibration_intercept": 0.0,
+        "required_features": ["binary_sensor.window"],
+        "state_mappings": {},
+    }
+    entry.options = {}
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor._recompute_state(datetime.now())
+
+    assert sensor.available is False
+    assert sensor.extra_state_attributes["missing_features"] == ["binary_sensor.window"]
