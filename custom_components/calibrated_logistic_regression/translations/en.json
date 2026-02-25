@@ -3,21 +3,57 @@
     "step": {
       "user": {
         "title": "Calibrated Logistic Regression",
-        "description": "Create a probability sensor from feature entities and model coefficients.",
+        "description": "Name the sensor and define what probability means in your automation context.",
         "data": {
           "name": "Name",
+          "goal": "Probability goal"
+        }
+      },
+      "features": {
+        "title": "Select Features",
+        "description": "Choose the entity IDs used as model features.",
+        "data": {
+          "required_features": "Required features"
+        }
+      },
+      "feature_types": {
+        "title": "Feature Types",
+        "description": "Mark each feature as numeric or categorical.",
+        "data": {
+          "feature_types": "Feature types JSON"
+        }
+      },
+      "mappings": {
+        "title": "Categorical Mappings",
+        "description": "Map non-numeric states to numbers for categorical features.",
+        "data": {
+          "state_mappings": "State mappings JSON"
+        }
+      },
+      "model": {
+        "title": "Model Parameters",
+        "description": "Provide model coefficients and calibration values.",
+        "data": {
           "intercept": "Intercept",
           "coefficients": "Coefficients JSON",
-          "required_features": "Required features",
-          "state_mappings": "State mappings JSON",
           "calibration_slope": "Calibration slope",
           "calibration_intercept": "Calibration intercept"
+        }
+      },
+      "preview": {
+        "title": "Preview",
+        "description": "Review and confirm this integration setup.",
+        "data": {
+          "confirm": "Confirm setup"
         }
       }
     },
     "error": {
       "invalid_coefficients": "Coefficients must be valid JSON object of entity_id to number.",
+      "invalid_feature_types": "Feature types must be a JSON object containing numeric/categorical for each selected feature.",
       "invalid_state_mappings": "State mappings must be JSON object of entity_id to state-to-number mapping.",
+      "missing_categorical_mappings": "Every categorical feature needs at least one state mapping.",
+      "coefficient_mismatch": "Coefficient keys must exactly match selected features.",
       "required": "This field is required."
     },
     "abort": {
@@ -27,12 +63,30 @@
   "options": {
     "step": {
       "init": {
-        "title": "Calibration Options",
+        "title": "Manage Integration"
+      },
+      "features": {
+        "title": "Manage Features",
         "data": {
-          "calibration_slope": "Calibration slope",
-          "calibration_intercept": "Calibration intercept",
+          "required_features": "Required features"
+        }
+      },
+      "mappings": {
+        "title": "Manage Mappings",
+        "data": {
           "state_mappings": "State mappings JSON"
         }
+      },
+      "calibration": {
+        "title": "Manage Calibration",
+        "data": {
+          "calibration_slope": "Calibration slope",
+          "calibration_intercept": "Calibration intercept"
+        }
+      },
+      "diagnostics": {
+        "title": "Diagnostics",
+        "description": "Review current feature coverage and mapping health."
       }
     }
   }

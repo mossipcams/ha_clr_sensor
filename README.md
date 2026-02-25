@@ -2,28 +2,40 @@
 
 Custom integration that exposes a calibrated logistic regression output as a Home Assistant sensor.
 
-## Features
+## UX Overhaul Highlights
 
-- One sensor per config entry
-- Logistic regression from source entity states
-- Optional categorical encoding for non-numeric states (`state_mappings`)
-- Platt-style calibration (`calibration_slope`, `calibration_intercept`)
-- Availability handling when required features are missing/unmapped/non-numeric
-- Diagnostic attributes (`raw_probability`, `linear_score`, feature values, missing features)
+- Multi-step setup wizard (instead of one raw JSON screen)
+- Guided post-setup management menu in options flow
+- Built-in categorical state mapping for non-numeric entities
+- Explainability attributes for runtime transparency and debugging
 
-## Installation
+## Setup Wizard Steps
 
-1. Copy `custom_components/calibrated_logistic_regression` into your HA `custom_components` folder.
-2. Restart Home Assistant.
-3. Add integration from **Settings -> Devices & Services -> Add Integration**.
+1. **Name & Goal**: define sensor name and what probability represents.
+2. **Features**: list entity IDs used as features.
+3. **Feature Types**: set each feature to `numeric` or `categorical`.
+4. **Mappings**: map categorical states to numbers.
+5. **Model**: provide intercept, coefficients, and calibration values.
+6. **Preview**: confirm before saving.
 
-## Configuration Inputs
+## Management After Setup
+
+Open the integration options and choose:
+
+- **Features**: edit required feature entity IDs
+- **Mappings**: adjust categorical state-to-number mappings
+- **Calibration**: tune slope/intercept
+- **Diagnostics**: see feature coverage context
+
+## Configuration Inputs (Stored)
 
 - `name`: Sensor name
+- `goal`: Human-readable probability purpose
+- `required_features`: Feature entity IDs
+- `feature_types`: Feature typing map (`numeric` / `categorical`)
+- `state_mappings`: Optional map for categorical states
 - `intercept`: Model intercept
-- `coefficients`: JSON map of feature entity IDs to weights
-- `required_features`: Comma-separated list of feature entity IDs
-- `state_mappings`: Optional JSON map for categorical states
+- `coefficients`: Feature weight map
 - `calibration_slope`: Calibration slope (default `1.0`)
 - `calibration_intercept`: Calibration intercept (default `0.0`)
 
@@ -36,17 +48,21 @@ Custom integration that exposes a calibrated logistic regression output as a Hom
 }
 ```
 
+## Runtime Explainability Attributes
+
+- `raw_probability`
+- `linear_score`
+- `feature_values`
+- `feature_contributions`
+- `mapped_state_values`
+- `missing_features`
+- `unavailable_reason`
+- `last_computed_at`
+
 ## Sensor Behavior
 
 - State is calibrated probability in percent (`0-100`).
 - Numeric source states are used directly.
-- Non-numeric source states are encoded through `state_mappings` when present.
-- Sensor becomes unavailable if any required feature is missing or cannot be converted.
-- Updates when any required feature state changes.
-
-## Best-Practice Notes
-
-- Keep coefficients and required features aligned.
-- Prefer explicit mappings for categorical states so behavior is deterministic.
-- Use stable source entities and avoid frequently changing text labels.
-- Start with `calibration_slope=1.0` and `calibration_intercept=0.0` if calibration is unknown.
+- Categorical states use `state_mappings`.
+- Sensor becomes unavailable if required features are missing/unmapped.
+- Sensor updates whenever required feature entities change state.
