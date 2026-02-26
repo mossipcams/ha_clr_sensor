@@ -62,11 +62,7 @@ def test_wizard_happy_path_creates_entry_from_looped_feature_state_pairs() -> No
     assert second_pair["type"] == "form"
     assert second_pair["step_id"] == "feature_more"
 
-    preview = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
-    assert preview["type"] == "form"
-    assert preview["step_id"] == "preview"
-
-    created = asyncio.run(flow.async_step_preview({"confirm": True}))
+    created = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
     assert created["type"] == "create_entry"
     assert created["title"] == "Kitchen MindML"
     assert created["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
@@ -335,11 +331,7 @@ def test_wizard_features_step_accepts_list_payload_and_creates_entry() -> None:
     assert first_pair["type"] == "form"
     assert first_pair["step_id"] == "feature_more"
 
-    preview = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
-    assert preview["type"] == "form"
-    assert preview["step_id"] == "preview"
-
-    created = asyncio.run(flow.async_step_preview({"confirm": True}))
+    created = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
     assert created["type"] == "create_entry"
     assert created["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
     assert created["data"]["feature_states"] == {
@@ -418,8 +410,7 @@ def test_wizard_list_payload_updates_existing_feature_without_duplicates() -> No
             }
         )
     )
-    asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
-    created = asyncio.run(flow.async_step_preview({"confirm": True}))
+    created = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
 
     assert created["type"] == "create_entry"
     assert created["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
@@ -427,6 +418,33 @@ def test_wizard_list_payload_updates_existing_feature_without_duplicates() -> No
         "sensor.a": "off",
         "binary_sensor.window": "off",
     }
+
+
+def test_wizard_finish_features_persists_entry_without_preview_step() -> None:
+    flow = _new_flow()
+    asyncio.run(
+        flow.async_step_user(
+            {
+                "name": "Hallway MindML",
+                "goal": "risk",
+                "ml_db_path": "/tmp/ha_ml_data_layer.db",
+            }
+        )
+    )
+    asyncio.run(
+        flow.async_step_features(
+            {
+                "feature": "sensor.a",
+                "state": "on",
+                "threshold": 55.0,
+            }
+        )
+    )
+    result = asyncio.run(flow.async_step_feature_more({"next_action": "finish_features"}))
+
+    assert result["type"] == "create_entry"
+    assert result["title"] == "Hallway MindML"
+    assert result["data"]["required_features"] == ["sensor.a"]
 
 
 def test_wizard_logs_feature_normalization_and_finish_summary(caplog) -> None:

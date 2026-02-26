@@ -311,7 +311,27 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         self._draft[CONF_FEATURE_STATES] = feature_states
         self._draft[CONF_FEATURE_TYPES] = feature_types
         self._draft[CONF_STATE_MAPPINGS] = state_mappings
-        return await self.async_step_preview()
+        _LOGGER.debug(
+            "wizard_finish_features_persisting_entry name=%s count=%d",
+            str(self._draft.get(CONF_NAME, "")),
+            len(required_features),
+        )
+        return self.async_create_entry(
+            title=str(self._draft[CONF_NAME]),
+            data={
+                CONF_NAME: self._draft[CONF_NAME],
+                CONF_GOAL: self._draft[CONF_GOAL],
+                CONF_REQUIRED_FEATURES: self._draft[CONF_REQUIRED_FEATURES],
+                CONF_FEATURE_TYPES: self._draft[CONF_FEATURE_TYPES],
+                CONF_FEATURE_STATES: self._draft[CONF_FEATURE_STATES],
+                CONF_STATE_MAPPINGS: self._draft[CONF_STATE_MAPPINGS],
+                CONF_THRESHOLD: self._draft[CONF_THRESHOLD],
+                CONF_ML_DB_PATH: self._draft[CONF_ML_DB_PATH],
+                CONF_ML_ARTIFACT_VIEW: self._draft[CONF_ML_ARTIFACT_VIEW],
+                CONF_ML_FEATURE_SOURCE: self._draft[CONF_ML_FEATURE_SOURCE],
+                CONF_ML_FEATURE_VIEW: self._draft[CONF_ML_FEATURE_VIEW],
+            },
+        )
 
     async def async_step_states(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
