@@ -145,3 +145,19 @@ def test_user_step_allows_blank_ml_db_path_and_continues() -> None:
 
     assert user_result["type"] == "form"
     assert user_result["step_id"] == "features"
+
+
+def test_user_step_blank_ml_db_path_uses_appdaemon_default() -> None:
+    flow = _new_flow()
+
+    asyncio.run(
+        flow.async_step_user(
+            {
+                "name": "Kitchen MindML",
+                "goal": "risk",
+                "ml_db_path": "",
+            }
+        )
+    )
+
+    assert flow._draft["ml_db_path"] == "/homeassistant/appdaemon/ha_ml_data_layer.db"
