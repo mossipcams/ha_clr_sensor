@@ -10,6 +10,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     CONF_FEATURE_TYPES,
@@ -42,7 +43,7 @@ async def async_setup_entry(
     async_add_entities([CalibratedLogisticRegressionSensor(hass, entry)])
 
 
-class CalibratedLogisticRegressionSensor(SensorEntity):
+class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
     """Probability sensor backed by LightGBM model artifacts."""
 
     _attr_has_entity_name = True
@@ -83,7 +84,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
         self._model_artifact_meta: dict[str, Any] = dict(model_result.artifact_meta)
 
         self._required_features: list[str] = list(config.get(CONF_REQUIRED_FEATURES, []))
-        if self._model.feature_names:
+        if self._model.feature_names and self._ml_feature_source == "ml_snapshot":
             self._required_features = list(self._model.feature_names)
 
         self._feature_types: dict[str, str] = {
@@ -115,6 +116,8 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
                 required_features=self._required_features,
                 feature_types=self._feature_types,
                 state_mappings=self._state_mappings,
+                # Computed features (event_count, on_ratio) are not available via HA state.
+                # Users needing data-layer features should use ml_snapshot mode.
                 history_feature_loader=lambda required: {},
             )
 
@@ -141,6 +144,25 @@ class CalibratedLogisticRegressionSensor(SensorEntity):
     async def async_added_to_hass(self) -> None:
         """Subscribe to source entity updates."""
         await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state not in (None, "unknown", "unavailable"):
+            try:
+                self._native_value = float(last_state.state)
+                self._available = True
+            except (TypeError, ValueError):
+                pass
+            attrs = last_state.attributes or {}
+            if attrs.get("raw_probability") is not None:
+                self._raw_probability = attrs["raw_probability"]
+            if attrs.get("linear_score") is not None:
+                self._linear_score = attrs["linear_score"]
+            self._feature_values = dict(attrs.get("feature_values") or {})
+            self._feature_contributions = dict(attrs.get("feature_contributions") or {})
+            self._missing_features = list(attrs.get("missing_features") or [])
+            self._last_computed_at = attrs.get("last_computed_at")
+            self._is_above_threshold = attrs.get("is_above_threshold")
+            self._decision = attrs.get("decision")
+
         if self._ml_feature_source == "hass_state":
             watched_entities = list(dict.fromkeys(self._required_features))
 

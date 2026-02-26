@@ -13,6 +13,7 @@ config_entries = types.ModuleType("homeassistant.config_entries")
 core = types.ModuleType("homeassistant.core")
 entity_platform = types.ModuleType("homeassistant.helpers.entity_platform")
 event_helpers = types.ModuleType("homeassistant.helpers.event")
+restore_state = types.ModuleType("homeassistant.helpers.restore_state")
 
 
 class SensorEntity:
@@ -30,6 +31,11 @@ class SensorStateClass:
     MEASUREMENT = "measurement"
 
 
+class RestoreEntity:
+    async def async_get_last_state(self):
+        return None
+
+
 sensor_component.SensorEntity = SensorEntity
 sensor_component.SensorStateClass = SensorStateClass
 config_entries.ConfigEntry = object
@@ -38,6 +44,7 @@ core.HomeAssistant = object
 core.callback = lambda fn: fn
 entity_platform.AddEntitiesCallback = object
 event_helpers.async_track_state_change_event = lambda hass, entities, cb: lambda: None
+restore_state.RestoreEntity = RestoreEntity
 
 sys.modules.setdefault("homeassistant", homeassistant)
 sys.modules.setdefault("homeassistant.components", components)
@@ -46,6 +53,7 @@ sys.modules.setdefault("homeassistant.config_entries", config_entries)
 sys.modules.setdefault("homeassistant.core", core)
 sys.modules.setdefault("homeassistant.helpers.entity_platform", entity_platform)
 sys.modules.setdefault("homeassistant.helpers.event", event_helpers)
+sys.modules.setdefault("homeassistant.helpers.restore_state", restore_state)
 
 from custom_components.calibrated_logistic_regression.sensor import CalibratedLogisticRegressionSensor
 
@@ -65,7 +73,7 @@ class _ModelProvider:
             ),
             source="ml_data_layer",
             artifact_error=None,
-            artifact_meta={"model_type": "lightgbm_binary_classifier"},
+            artifact_meta={"model_type": "lightgbm_like"},
         )
 
 

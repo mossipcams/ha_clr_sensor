@@ -43,7 +43,7 @@ def test_load_latest_lightgbm_model_artifact_parses_payload(tmp_path: Path) -> N
         artifact_json = json.dumps(
             {
                 "model": {
-                    "type": "lightgbm_binary_classifier",
+                    "type": "lightgbm_like",
                     "intercept": -1.25,
                     "weights": [0.5, 0.25],
                 },
@@ -53,7 +53,7 @@ def test_load_latest_lightgbm_model_artifact_parses_payload(tmp_path: Path) -> N
         conn.execute(
             """
             INSERT INTO lightgbm_model_artifacts(created_at_utc, model_type, feature_set_version, artifact_json)
-            VALUES ('2026-02-25T00:00:00+00:00', 'lightgbm_binary_classifier', 'v2', ?)
+            VALUES ('2026-02-25T00:00:00+00:00', 'lightgbm_like', 'v2', ?)
             """,
             (artifact_json,),
         )
@@ -62,8 +62,8 @@ def test_load_latest_lightgbm_model_artifact_parses_payload(tmp_path: Path) -> N
         conn.close()
 
     artifact = load_latest_lightgbm_model_artifact(str(db_path))
-    assert artifact.model_type == "lightgbm_binary_classifier"
+    assert artifact.model_type == "lightgbm_like"
     assert artifact.feature_set_version == "v2"
     assert artifact.feature_names == ["event_count", "on_ratio"]
-    assert artifact.model_payload["type"] == "lightgbm_binary_classifier"
+    assert artifact.model_payload["type"] == "lightgbm_like"
     assert artifact.model_payload["intercept"] == -1.25

@@ -27,6 +27,7 @@ def _install_homeassistant_stubs() -> None:
     selector = types.ModuleType("homeassistant.helpers.selector")
     entity_platform = types.ModuleType("homeassistant.helpers.entity_platform")
     event_helpers = types.ModuleType("homeassistant.helpers.event")
+    restore_state = types.ModuleType("homeassistant.helpers.restore_state")
 
     class ConfigFlow:
         @classmethod
@@ -82,6 +83,10 @@ def _install_homeassistant_stubs() -> None:
     class SensorStateClass:
         MEASUREMENT = "measurement"
 
+    class RestoreEntity:
+        async def async_get_last_state(self):
+            return None
+
     class SelectSelectorMode:
         DROPDOWN = "dropdown"
 
@@ -123,6 +128,7 @@ def _install_homeassistant_stubs() -> None:
     core.callback = lambda fn: fn
     sensor_component.SensorEntity = SensorEntity
     sensor_component.SensorStateClass = SensorStateClass
+    restore_state.RestoreEntity = RestoreEntity
     selector.SelectSelectorMode = SelectSelectorMode
     selector.SelectOptionDict = SelectOptionDict
     selector.SelectSelectorConfig = SelectSelectorConfig
@@ -143,6 +149,7 @@ def _install_homeassistant_stubs() -> None:
     sys.modules["homeassistant.helpers.selector"] = selector
     sys.modules["homeassistant.helpers.entity_platform"] = entity_platform
     sys.modules["homeassistant.helpers.event"] = event_helpers
+    sys.modules["homeassistant.helpers.restore_state"] = restore_state
 
 
 _install_homeassistant_stubs()

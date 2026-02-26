@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 from homeassistant.core import State
 
@@ -155,3 +155,131 @@ def test_sensor_resolves_default_ml_db_path_when_missing(monkeypatch) -> None:
 
     assert _Provider.last_kwargs["db_path"] == "/homeassistant/appdaemon/ha_ml_data_layer.db"
     assert sensor.extra_state_attributes["model_runtime"] == "lightgbm"
+
+
+def test_sensor_hass_state_keeps_configured_features_when_model_has_abstract_names(
+    monkeypatch,
+) -> None:
+    hass = MagicMock()
+    entry = _build_entry()
+
+    class _Provider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def load(self):
+            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
+            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+
+            return ModelProviderResult(
+                model=LightGBMModelSpec(
+                    feature_names=["event_count", "on_ratio"],
+                    model_payload={"intercept": 0.0, "weights": [0.0, 0.0]},
+                ),
+                source="ml_data_layer",
+                artifact_error=None,
+                artifact_meta={},
+            )
+
+    monkeypatch.setattr(
+        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        _Provider,
+    )
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    assert sensor._required_features == ["sensor.a", "sensor.b"]
+
+
+def test_sensor_restores_state_from_last_known(monkeypatch) -> None:
+    hass = MagicMock()
+    entry = _build_entry()
+
+    class _Provider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def load(self):
+            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
+            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+
+            return ModelProviderResult(
+                model=LightGBMModelSpec(
+                    feature_names=["sensor.a", "sensor.b"],
+                    model_payload={"intercept": 0.0, "weights": [0.0, 0.0]},
+                ),
+                source="ml_data_layer",
+                artifact_error=None,
+                artifact_meta={},
+            )
+
+    class _LastState:
+        state = "72.5"
+        attributes = {
+            "raw_probability": 0.725,
+            "linear_score": 1.23,
+            "feature_values": {"sensor.a": 1.0},
+            "feature_contributions": {"sensor.a": 0.5},
+            "missing_features": ["sensor.b"],
+            "last_computed_at": "2026-02-26T00:00:00+00:00",
+            "is_above_threshold": True,
+            "decision": "positive",
+        }
+
+    monkeypatch.setattr(
+        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        _Provider,
+    )
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor.async_get_last_state = AsyncMock(return_value=_LastState())
+    sensor._recompute_state = lambda now: None
+
+    asyncio.run(sensor.async_added_to_hass())
+
+    assert sensor.native_value == 72.5
+    attrs = sensor.extra_state_attributes
+    assert attrs["raw_probability"] == 0.725
+    assert attrs["linear_score"] == 1.23
+    assert attrs["feature_values"] == {"sensor.a": 1.0}
+    assert attrs["feature_contributions"] == {"sensor.a": 0.5}
+    assert attrs["missing_features"] == ["sensor.b"]
+    assert attrs["last_computed_at"] == "2026-02-26T00:00:00+00:00"
+    assert attrs["is_above_threshold"] is True
+    assert attrs["decision"] == "positive"
+
+
+def test_sensor_handles_no_previous_state(monkeypatch) -> None:
+    hass = MagicMock()
+    entry = _build_entry()
+
+    class _Provider:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+        def load(self):
+            from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
+            from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
+
+            return ModelProviderResult(
+                model=LightGBMModelSpec(
+                    feature_names=["sensor.a", "sensor.b"],
+                    model_payload={"intercept": 0.0, "weights": [0.0, 0.0]},
+                ),
+                source="ml_data_layer",
+                artifact_error=None,
+                artifact_meta={},
+            )
+
+    monkeypatch.setattr(
+        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
+        _Provider,
+    )
+
+    sensor = CalibratedLogisticRegressionSensor(hass, entry)
+    sensor.async_get_last_state = AsyncMock(return_value=None)
+    sensor._recompute_state = lambda now: None
+
+    asyncio.run(sensor.async_added_to_hass())
+
+    assert sensor.native_value is None
+    assert sensor.available is False
