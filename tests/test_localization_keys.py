@@ -31,3 +31,14 @@ def test_strings_contains_wizard_and_options_labels() -> None:
     assert "decision" in init_menu_options
     assert "features" in init_menu_options
     assert "diagnostics" in init_menu_options
+
+
+def test_features_step_description_mentions_inline_states() -> None:
+    path = Path("custom_components/calibrated_logistic_regression/strings.json")
+    strings = json.loads(path.read_text())
+
+    config_features_description = strings["config"]["step"]["features"]["description"]
+    options_features_description = strings["options"]["step"]["features"]["description"]
+
+    assert "state" in config_features_description.casefold()
+    assert "state" in options_features_description.casefold()

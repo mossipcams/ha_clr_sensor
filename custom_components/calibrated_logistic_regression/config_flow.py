@@ -83,14 +83,21 @@ def _build_user_schema() -> vol.Schema:
     )
 
 
-def _build_features_schema(default_features: list[str]) -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required(CONF_REQUIRED_FEATURES, default=default_features): selector.EntitySelector(
-                selector.EntitySelectorConfig(multiple=True)
-            ),
-        }
-    )
+def _build_features_schema(
+    default_features: list[str],
+    default_states: dict[str, str] | None = None,
+    default_threshold: float = DEFAULT_THRESHOLD,
+) -> vol.Schema:
+    states = default_states or {}
+    schema: dict[Any, Any] = {
+        vol.Required(CONF_REQUIRED_FEATURES, default=default_features): selector.EntitySelector(
+            selector.EntitySelectorConfig(multiple=True)
+        ),
+        vol.Optional(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
+    }
+    for feature in default_features:
+        schema[vol.Optional(feature, default=states.get(feature, ""))] = str
+    return vol.Schema(schema)
 
 
 def _build_states_schema(
@@ -158,18 +165,53 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
 
     async def async_step_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
+        default_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
+        default_states = dict(self._draft.get(CONF_FEATURE_STATES, {}))
+        default_threshold = float(self._draft.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
+
         if user_input is not None:
             required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
+            default_features = list(required_features)
+            default_threshold = float(user_input.get(CONF_THRESHOLD, default_threshold))
             if not required_features:
                 errors[CONF_REQUIRED_FEATURES] = "required"
+            feature_states: dict[str, str] = {}
+            for feature in required_features:
+                raw_value = user_input.get(feature)
+                if raw_value is None or str(raw_value).strip() == "":
+                    errors[feature] = "required"
+                    feature_states[feature] = ""
+                    continue
+                feature_states[feature] = str(raw_value)
+            default_states = feature_states
+
             if not errors:
                 self._draft[CONF_REQUIRED_FEATURES] = required_features
-                return await self.async_step_states()
+                self._draft[CONF_FEATURE_STATES] = {feature: feature_states[feature] for feature in required_features}
+                feature_types = infer_feature_types_from_states(self._draft[CONF_FEATURE_STATES])
+                self._draft[CONF_FEATURE_TYPES] = {
+                    feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
+                    for feature in required_features
+                }
 
-        default_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
+                inferred_state_mappings = infer_state_mappings_from_states(self._draft[CONF_FEATURE_STATES])
+                final_state_mappings: dict[str, dict[str, float]] = {}
+                for feature in required_features:
+                    if self._draft[CONF_FEATURE_TYPES][feature] != FEATURE_TYPE_CATEGORICAL:
+                        continue
+                    if feature in inferred_state_mappings:
+                        final_state_mappings[feature] = inferred_state_mappings[feature]
+                    else:
+                        final_state_mappings[feature] = {
+                            self._draft[CONF_FEATURE_STATES][feature].casefold(): 1.0
+                        }
+                self._draft[CONF_STATE_MAPPINGS] = final_state_mappings
+                self._draft[CONF_THRESHOLD] = default_threshold
+                return await self.async_step_preview()
+
         return self.async_show_form(
             step_id="features",
-            data_schema=_build_features_schema(default_features),
+            data_schema=_build_features_schema(default_features, default_states, default_threshold),
             errors=errors,
             description_placeholders={
                 "features_help": "Pick entities like sensor.temperature or binary_sensor.door.",
@@ -376,21 +418,69 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
-        if user_input is not None:
-            required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
-            if not required_features:
-                errors[CONF_REQUIRED_FEATURES] = "required"
-            if not errors:
-                self._draft[CONF_REQUIRED_FEATURES] = required_features
-                return await self.async_step_states()
-
         default_features = self._config_entry.options.get(
             CONF_REQUIRED_FEATURES,
             self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
         )
+        existing_states = self._config_entry.options.get(
+            CONF_FEATURE_STATES,
+            self._config_entry.data.get(CONF_FEATURE_STATES, {}),
+        )
+        default_states = {feature: str(existing_states.get(feature, "")) for feature in default_features}
+        default_threshold = float(
+            self._config_entry.options.get(
+                CONF_THRESHOLD,
+                self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
+            )
+        )
+
+        if user_input is not None:
+            required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
+            default_features = list(required_features)
+            default_threshold = float(user_input.get(CONF_THRESHOLD, default_threshold))
+            if not required_features:
+                errors[CONF_REQUIRED_FEATURES] = "required"
+            feature_states: dict[str, str] = {}
+            for feature in required_features:
+                raw_value = user_input.get(feature)
+                if raw_value is None or str(raw_value).strip() == "":
+                    errors[feature] = "required"
+                    feature_states[feature] = ""
+                    continue
+                feature_states[feature] = str(raw_value)
+            default_states = feature_states
+
+            if not errors:
+                feature_types = infer_feature_types_from_states(feature_states)
+                normalized_feature_types = {
+                    feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
+                    for feature in required_features
+                }
+
+                inferred_state_mappings = infer_state_mappings_from_states(feature_states)
+                state_mappings: dict[str, dict[str, float]] = {}
+                for feature in required_features:
+                    if normalized_feature_types[feature] != FEATURE_TYPE_CATEGORICAL:
+                        continue
+                    if feature in inferred_state_mappings:
+                        state_mappings[feature] = inferred_state_mappings[feature]
+                    else:
+                        state_mappings[feature] = {feature_states[feature].casefold(): 1.0}
+
+                return self.async_create_entry(
+                    title="",
+                    data={
+                        CONF_REQUIRED_FEATURES: required_features,
+                        CONF_FEATURE_STATES: feature_states,
+                        CONF_FEATURE_TYPES: normalized_feature_types,
+                        CONF_STATE_MAPPINGS: state_mappings,
+                        CONF_THRESHOLD: default_threshold,
+                    },
+                )
+
         return self.async_show_form(
             step_id="features",
-            data_schema=_build_features_schema(default_features),
+            data_schema=_build_features_schema(default_features, default_states, default_threshold),
             errors=errors,
             description_placeholders={
                 "features_help": "Pick entities to include as model features."

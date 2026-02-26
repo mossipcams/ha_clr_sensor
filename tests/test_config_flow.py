@@ -37,22 +37,17 @@ def test_wizard_happy_path_creates_entry_from_entities_states_and_threshold() ->
     assert user_result["step_id"] == "features"
 
     features_result = asyncio.run(
-        flow.async_step_features({"required_features": ["sensor.a", "binary_sensor.window"]})
-    )
-    assert features_result["type"] == "form"
-    assert features_result["step_id"] == "states"
-
-    states_result = asyncio.run(
-        flow.async_step_states(
+        flow.async_step_features(
             {
+                "required_features": ["sensor.a", "binary_sensor.window"],
                 "sensor.a": "22.5",
                 "binary_sensor.window": "on",
                 "threshold": 65.0,
             }
         )
     )
-    assert states_result["type"] == "form"
-    assert states_result["step_id"] == "preview"
+    assert features_result["type"] == "form"
+    assert features_result["step_id"] == "preview"
 
     preview_result = asyncio.run(flow.async_step_preview({"confirm": True}))
     assert preview_result["type"] == "create_entry"
@@ -112,7 +107,7 @@ def test_options_flow_decision_updates_threshold() -> None:
     assert result["data"]["threshold"] == 72.5
 
 
-def test_options_flow_features_then_states_updates_feature_configuration() -> None:
+def test_options_flow_features_updates_feature_configuration_inline() -> None:
     entry = MagicMock()
     entry.options = {}
     entry.data = {
@@ -127,30 +122,21 @@ def test_options_flow_features_then_states_updates_feature_configuration() -> No
         flow.async_step_features(
             {
                 "required_features": ["sensor.a", "binary_sensor.window"],
-            }
-        )
-    )
-    assert features_result["type"] == "form"
-    assert features_result["step_id"] == "states"
-
-    states_result = asyncio.run(
-        flow.async_step_states(
-            {
                 "sensor.a": "23.0",
                 "binary_sensor.window": "off",
                 "threshold": 65.0,
             }
         )
     )
-    assert states_result["type"] == "create_entry"
-    assert states_result["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
-    assert states_result["data"]["feature_states"] == {
+    assert features_result["type"] == "create_entry"
+    assert features_result["data"]["required_features"] == ["sensor.a", "binary_sensor.window"]
+    assert features_result["data"]["feature_states"] == {
         "sensor.a": "23.0",
         "binary_sensor.window": "off",
     }
-    assert states_result["data"]["feature_types"]["binary_sensor.window"] == "categorical"
-    assert states_result["data"]["state_mappings"]["binary_sensor.window"] == {"off": 0.0, "on": 1.0}
-    assert states_result["data"]["threshold"] == 65.0
+    assert features_result["data"]["feature_types"]["binary_sensor.window"] == "categorical"
+    assert features_result["data"]["state_mappings"]["binary_sensor.window"] == {"off": 0.0, "on": 1.0}
+    assert features_result["data"]["threshold"] == 65.0
 
 
 def test_user_step_allows_blank_ml_db_path_and_continues() -> None:
@@ -184,3 +170,67 @@ def test_user_step_blank_ml_db_path_uses_appdaemon_default() -> None:
     )
 
     assert flow._draft["ml_db_path"] == "/homeassistant/appdaemon/ha_ml_data_layer.db"
+
+
+def test_wizard_features_step_requires_state_for_new_feature_and_shows_blank_box() -> None:
+    flow = _new_flow()
+
+    user_result = asyncio.run(
+        flow.async_step_user(
+            {
+                "name": "Kitchen MindML",
+                "goal": "risk",
+                "ml_db_path": "/tmp/ha_ml_data_layer.db",
+            }
+        )
+    )
+    assert user_result["type"] == "form"
+    assert user_result["step_id"] == "features"
+
+    features_result = asyncio.run(
+        flow.async_step_features(
+            {
+                "required_features": ["sensor.a", "binary_sensor.window"],
+                "sensor.a": "22.5",
+                "threshold": 65.0,
+            }
+        )
+    )
+    assert features_result["type"] == "form"
+    assert features_result["step_id"] == "features"
+    assert features_result["errors"]["binary_sensor.window"] == "required"
+
+    followup_schema_keys = [str(k.schema) for k in features_result["data_schema"].schema]
+    assert "required_features" in followup_schema_keys
+    assert "sensor.a" in followup_schema_keys
+    assert "binary_sensor.window" in followup_schema_keys
+
+
+def test_options_features_step_requires_state_for_new_feature_and_shows_blank_box() -> None:
+    entry = MagicMock()
+    entry.options = {}
+    entry.data = {
+        "required_features": ["sensor.a"],
+        "feature_states": {"sensor.a": "22.5"},
+        "state_mappings": {},
+        "threshold": 50.0,
+    }
+
+    flow = ClrOptionsFlow(entry)
+    features_result = asyncio.run(
+        flow.async_step_features(
+            {
+                "required_features": ["sensor.a", "binary_sensor.window"],
+                "sensor.a": "23.0",
+                "threshold": 65.0,
+            }
+        )
+    )
+    assert features_result["type"] == "form"
+    assert features_result["step_id"] == "features"
+    assert features_result["errors"]["binary_sensor.window"] == "required"
+
+    followup_schema_keys = [str(k.schema) for k in features_result["data_schema"].schema]
+    assert "required_features" in followup_schema_keys
+    assert "sensor.a" in followup_schema_keys
+    assert "binary_sensor.window" in followup_schema_keys

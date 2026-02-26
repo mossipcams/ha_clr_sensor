@@ -15,9 +15,10 @@
       },
       "features": {
         "title": "Select Features",
-        "description": "Choose entities used as runtime features. {features_help}",
+        "description": "Choose entities used as runtime features and enter each feature state. {features_help}",
         "data": {
-          "required_features": "Required features"
+          "required_features": "Required features",
+          "threshold": "Decision threshold (%)"
         }
       },
       "states": {
@@ -77,9 +78,10 @@
       },
       "features": {
         "title": "Features",
-        "description": "Manage feature entities.",
+        "description": "Manage feature entities and edit each feature state.",
         "data": {
-          "required_features": "Required features"
+          "required_features": "Required features",
+          "threshold": "Decision threshold (%)"
         }
       },
       "states": {
