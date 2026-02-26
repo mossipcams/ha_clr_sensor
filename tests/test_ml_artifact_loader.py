@@ -26,16 +26,16 @@ def test_load_latest_lightgbm_model_artifact_parses_payload(tmp_path: Path) -> N
     try:
         conn.executescript(
             """
-            CREATE TABLE clr_model_artifacts (
+            CREATE TABLE lightgbm_model_artifacts (
                 id INTEGER PRIMARY KEY,
                 created_at_utc TEXT NOT NULL,
                 model_type TEXT NOT NULL,
                 feature_set_version TEXT NOT NULL,
                 artifact_json TEXT NOT NULL
             );
-            CREATE VIEW vw_clr_latest_model_artifact AS
+            CREATE VIEW vw_lightgbm_latest_model_artifact AS
             SELECT *
-            FROM clr_model_artifacts
+            FROM lightgbm_model_artifacts
             ORDER BY created_at_utc DESC, id DESC
             LIMIT 1;
             """
@@ -52,7 +52,7 @@ def test_load_latest_lightgbm_model_artifact_parses_payload(tmp_path: Path) -> N
         )
         conn.execute(
             """
-            INSERT INTO clr_model_artifacts(created_at_utc, model_type, feature_set_version, artifact_json)
+            INSERT INTO lightgbm_model_artifacts(created_at_utc, model_type, feature_set_version, artifact_json)
             VALUES ('2026-02-25T00:00:00+00:00', 'lightgbm_binary_classifier', 'v2', ?)
             """,
             (artifact_json,),

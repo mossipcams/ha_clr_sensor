@@ -107,6 +107,9 @@ sys.modules.setdefault("homeassistant.helpers", helpers)
 sys.modules.setdefault("homeassistant.helpers.selector", selector)
 
 from custom_components.calibrated_logistic_regression.config_flow import _build_user_schema
+from custom_components.calibrated_logistic_regression.const import (
+    DEFAULT_ML_ARTIFACT_VIEW,
+)
 
 
 def test_user_schema_contains_ml_feature_source_and_view() -> None:
@@ -114,3 +117,7 @@ def test_user_schema_contains_ml_feature_source_and_view() -> None:
     keys = [str(k.schema) for k in schema.schema]
     assert "ml_feature_source" in keys
     assert "ml_feature_view" in keys
+
+
+def test_default_ml_artifact_view_is_lightgbm_contract() -> None:
+    assert DEFAULT_ML_ARTIFACT_VIEW == "vw_lightgbm_latest_model_artifact"

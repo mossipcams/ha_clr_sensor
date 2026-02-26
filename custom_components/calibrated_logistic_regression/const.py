@@ -17,7 +17,7 @@ CONF_ML_ARTIFACT_VIEW = "ml_artifact_view"
 CONF_ML_FEATURE_SOURCE = "ml_feature_source"
 CONF_ML_FEATURE_VIEW = "ml_feature_view"
 
-DEFAULT_ML_ARTIFACT_VIEW = "vw_clr_latest_model_artifact"
+DEFAULT_ML_ARTIFACT_VIEW = "vw_lightgbm_latest_model_artifact"
 DEFAULT_ML_FEATURE_SOURCE = "hass_state"
 DEFAULT_ML_FEATURE_VIEW = "vw_latest_feature_snapshot"
 DEFAULT_ML_DB_FILENAME = "ha_ml_data_layer.db"
