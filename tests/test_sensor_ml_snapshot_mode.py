@@ -47,9 +47,7 @@ sys.modules.setdefault("homeassistant.core", core)
 sys.modules.setdefault("homeassistant.helpers.entity_platform", entity_platform)
 sys.modules.setdefault("homeassistant.helpers.event", event_helpers)
 
-from custom_components.calibrated_logistic_regression.sensor import (
-    CalibratedLogisticRegressionSensor,
-)
+from custom_components.calibrated_logistic_regression.sensor import CalibratedLogisticRegressionSensor
 
 
 class _ModelProvider:
@@ -57,16 +55,17 @@ class _ModelProvider:
         self.kwargs = kwargs
 
     def load(self):
-        from custom_components.calibrated_logistic_regression.inference import ModelSpec
-        from custom_components.calibrated_logistic_regression.model_provider import (
-            ModelProviderResult,
-        )
+        from custom_components.calibrated_logistic_regression.lightgbm_inference import LightGBMModelSpec
+        from custom_components.calibrated_logistic_regression.model_provider import ModelProviderResult
 
         return ModelProviderResult(
-            model=ModelSpec(intercept=-1.0, coefficients={"event_count": 1.0}),
+            model=LightGBMModelSpec(
+                feature_names=["event_count"],
+                model_payload={"intercept": -1.0, "weights": [1.0]},
+            ),
             source="ml_data_layer",
             artifact_error=None,
-            artifact_meta={"model_type": "sklearn_logistic_regression"},
+            artifact_meta={"model_type": "lightgbm_binary_classifier"},
         )
 
 
@@ -75,9 +74,7 @@ class _FeatureProvider:
         self.kwargs = kwargs
 
     def load(self):
-        from custom_components.calibrated_logistic_regression.feature_provider import (
-            FeatureVectorResult,
-        )
+        from custom_components.calibrated_logistic_regression.feature_provider import FeatureVectorResult
 
         return FeatureVectorResult(
             feature_values={"event_count": 3.0},
@@ -88,7 +85,7 @@ class _FeatureProvider:
 
 def test_sensor_can_use_ml_snapshot_feature_source(monkeypatch) -> None:
     monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteArtifactModelProvider",
+        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
         _ModelProvider,
     )
     monkeypatch.setattr(
@@ -99,15 +96,10 @@ def test_sensor_can_use_ml_snapshot_feature_source(monkeypatch) -> None:
     hass = MagicMock()
     entry = MagicMock()
     entry.entry_id = "entry-ml"
-    entry.title = "ML CLR"
+    entry.title = "ML MindML"
     entry.data = {
-        "name": "ML CLR",
-        "model_type": "clr",
-        "intercept": 0.0,
-        "coefficients": {"event_count": 0.0},
+        "name": "ML MindML",
         "required_features": ["event_count"],
-        "calibration_slope": 1.0,
-        "calibration_intercept": 0.0,
         "threshold": 50.0,
         "ml_db_path": "/tmp/ha_ml_data_layer.db",
         "ml_artifact_view": "vw_clr_latest_model_artifact",
@@ -123,39 +115,6 @@ def test_sensor_can_use_ml_snapshot_feature_source(monkeypatch) -> None:
     assert sensor.available is True
     assert attrs["model_source"] == "ml_data_layer"
     assert attrs["feature_source"] == "ml_snapshot"
+    assert attrs["model_runtime"] == "lightgbm"
     assert attrs["missing_features"] == []
     assert attrs["feature_values"] == {"event_count": 3.0}
-
-
-def test_sensor_can_run_lightgbm_strategy(monkeypatch) -> None:
-    monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteLightGBMModelProvider",
-        _ModelProvider,
-    )
-    monkeypatch.setattr(
-        "custom_components.calibrated_logistic_regression.sensor.SqliteSnapshotFeatureProvider",
-        _FeatureProvider,
-    )
-
-    hass = MagicMock()
-    entry = MagicMock()
-    entry.entry_id = "entry-lgbm"
-    entry.title = "LGBM CLR"
-    entry.data = {
-        "name": "LGBM CLR",
-        "model_type": "lightgbm",
-        "required_features": ["event_count"],
-        "threshold": 50.0,
-        "ml_db_path": "/tmp/ha_ml_data_layer.db",
-        "ml_artifact_view": "vw_clr_latest_model_artifact",
-        "ml_feature_source": "ml_snapshot",
-        "ml_feature_view": "vw_latest_feature_snapshot",
-    }
-    entry.options = {}
-
-    sensor = CalibratedLogisticRegressionSensor(hass, entry)
-    sensor._recompute_state(datetime.now())
-    attrs = sensor.extra_state_attributes
-
-    assert sensor.available is True
-    assert attrs["model_runtime"] == "lightgbm"

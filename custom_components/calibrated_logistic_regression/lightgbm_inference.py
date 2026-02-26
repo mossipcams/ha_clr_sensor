@@ -5,8 +5,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from .inference import InferenceResult
 from .model import safe_sigmoid
+
+
+@dataclass(slots=True)
+class InferenceResult:
+    """Normalized inference output consumed by the sensor entity."""
+
+    available: bool
+    native_value: float | None
+    raw_probability: float | None
+    linear_score: float | None
+    feature_contributions: dict[str, float]
+    unavailable_reason: str | None
+    is_above_threshold: bool | None
+    decision: str | None
 
 
 @dataclass(slots=True)
@@ -24,15 +37,7 @@ def run_lightgbm_inference(
     model: LightGBMModelSpec,
     threshold: float,
 ) -> InferenceResult:
-    """Compute a probability using a LightGBM-like payload contract.
-
-    Current runtime supports a compact payload form with:
-    - intercept: float
-    - weights: list[float]
-
-    This preserves real-time scoring semantics without requiring optional
-    LightGBM runtime dependencies in constrained environments.
-    """
+    """Compute a probability using a LightGBM-like payload contract."""
     if missing_features:
         return InferenceResult(
             available=False,

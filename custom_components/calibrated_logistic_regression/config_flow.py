@@ -1,4 +1,4 @@
-"""Config flow for Calibrated Logistic Regression."""
+"""Config flow for the LightGBM probability sensor."""
 
 from __future__ import annotations
 
@@ -11,29 +11,21 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
 
 from .const import (
-    CONF_CALIBRATION_INTERCEPT,
-    CONF_CALIBRATION_SLOPE,
-    CONF_COEFFICIENTS,
     CONF_FEATURE_TYPES,
     CONF_FEATURE_STATES,
     CONF_GOAL,
-    CONF_INTERCEPT,
     CONF_ML_ARTIFACT_VIEW,
     CONF_ML_DB_PATH,
     CONF_ML_FEATURE_SOURCE,
     CONF_ML_FEATURE_VIEW,
-    CONF_MODEL_TYPE,
     CONF_NAME,
     CONF_REQUIRED_FEATURES,
     CONF_STATE_MAPPINGS,
     CONF_THRESHOLD,
-    DEFAULT_CALIBRATION_INTERCEPT,
-    DEFAULT_CALIBRATION_SLOPE,
     DEFAULT_GOAL,
     DEFAULT_ML_ARTIFACT_VIEW,
     DEFAULT_ML_FEATURE_SOURCE,
     DEFAULT_ML_FEATURE_VIEW,
-    DEFAULT_MODEL_TYPE,
     DEFAULT_THRESHOLD,
     DOMAIN,
 )
@@ -67,22 +59,7 @@ def _build_user_schema() -> vol.Schema:
                     mode=selector.SelectSelectorMode.DROPDOWN,
                 )
             ),
-            vol.Required(CONF_MODEL_TYPE, default=DEFAULT_MODEL_TYPE): selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=[
-                        selector.SelectOptionDict(
-                            value="lightgbm",
-                            label="LightGBM (recommended)",
-                        ),
-                        selector.SelectOptionDict(
-                            value="clr",
-                            label="Calibrated Logistic Regression",
-                        ),
-                    ],
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                )
-            ),
-            vol.Optional(CONF_ML_DB_PATH, default=""): str,
+            vol.Required(CONF_ML_DB_PATH): str,
             vol.Optional(CONF_ML_ARTIFACT_VIEW, default=DEFAULT_ML_ARTIFACT_VIEW): str,
             vol.Optional(
                 CONF_ML_FEATURE_SOURCE,
@@ -139,11 +116,7 @@ def _build_states_schema(
 
 
 def _build_preview_schema() -> vol.Schema:
-    return vol.Schema(
-        {
-            vol.Required("confirm", default=True): bool,
-        }
-    )
+    return vol.Schema({vol.Required("confirm", default=True): bool})
 
 
 class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -155,15 +128,17 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
         self._draft: dict[str, Any] = {}
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Collect integration name and goal."""
         errors: dict[str, str] = {}
         if user_input is not None:
             name = str(user_input[CONF_NAME]).strip()
             goal = str(user_input[CONF_GOAL]).strip()
+            ml_db_path = str(user_input.get(CONF_ML_DB_PATH, "")).strip()
             if not name:
                 errors[CONF_NAME] = "required"
             if not goal:
                 errors[CONF_GOAL] = "required"
+            if not ml_db_path:
+                errors[CONF_ML_DB_PATH] = "required"
 
             if not errors:
                 for entry in self._async_current_entries():
@@ -171,26 +146,16 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                         return self.async_abort(reason="already_configured")
                 self._draft[CONF_NAME] = name
                 self._draft[CONF_GOAL] = goal
-                self._draft[CONF_MODEL_TYPE] = str(
-                    user_input.get(CONF_MODEL_TYPE, DEFAULT_MODEL_TYPE)
-                ).strip() or DEFAULT_MODEL_TYPE
-                ml_db_path = str(user_input.get(CONF_ML_DB_PATH, "")).strip()
-                ml_artifact_view = str(
+                self._draft[CONF_ML_DB_PATH] = ml_db_path
+                self._draft[CONF_ML_ARTIFACT_VIEW] = str(
                     user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
-                ).strip()
-                ml_feature_source = str(
+                ).strip() or DEFAULT_ML_ARTIFACT_VIEW
+                self._draft[CONF_ML_FEATURE_SOURCE] = str(
                     user_input.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
                 ).strip() or DEFAULT_ML_FEATURE_SOURCE
-                ml_feature_view = str(
+                self._draft[CONF_ML_FEATURE_VIEW] = str(
                     user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
                 ).strip() or DEFAULT_ML_FEATURE_VIEW
-                if ml_db_path:
-                    self._draft[CONF_ML_DB_PATH] = ml_db_path
-                    self._draft[CONF_ML_ARTIFACT_VIEW] = (
-                        ml_artifact_view or DEFAULT_ML_ARTIFACT_VIEW
-                    )
-                self._draft[CONF_ML_FEATURE_SOURCE] = ml_feature_source
-                self._draft[CONF_ML_FEATURE_VIEW] = ml_feature_view
                 return await self.async_step_features()
 
         return self.async_show_form(
@@ -202,11 +167,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             },
         )
 
-    async def async_step_features(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Collect feature entity IDs."""
+    async def async_step_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         if user_input is not None:
             required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
@@ -226,11 +187,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             },
         )
 
-    async def async_step_states(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Collect user-provided states and optional probability threshold."""
+    async def async_step_states(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         errors: dict[str, str] = {}
         required_features = list(self._draft.get(CONF_REQUIRED_FEATURES, []))
 
@@ -243,10 +200,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                     continue
                 feature_states[feature] = str(raw_value)
             if not errors:
-                self._draft[CONF_FEATURE_STATES] = {
-                    feature: feature_states[feature]
-                    for feature in required_features
-                }
+                self._draft[CONF_FEATURE_STATES] = {feature: feature_states[feature] for feature in required_features}
                 feature_types = infer_feature_types_from_states(self._draft[CONF_FEATURE_STATES])
                 self._draft[CONF_FEATURE_TYPES] = {
                     feature: feature_types.get(feature, FEATURE_TYPE_NUMERIC)
@@ -260,21 +214,12 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                         continue
                     if feature in inferred_state_mappings:
                         final_state_mappings[feature] = inferred_state_mappings[feature]
-                        continue
-                    final_state_mappings[feature] = {
-                        self._draft[CONF_FEATURE_STATES][feature].casefold(): 1.0
-                    }
+                    else:
+                        final_state_mappings[feature] = {
+                            self._draft[CONF_FEATURE_STATES][feature].casefold(): 1.0
+                        }
                 self._draft[CONF_STATE_MAPPINGS] = final_state_mappings
-
-                self._draft[CONF_THRESHOLD] = float(
-                    user_input.get(CONF_THRESHOLD, DEFAULT_THRESHOLD)
-                )
-                self._draft[CONF_INTERCEPT] = 0.0
-                self._draft[CONF_COEFFICIENTS] = {
-                    feature: 1.0 for feature in required_features
-                }
-                self._draft[CONF_CALIBRATION_SLOPE] = DEFAULT_CALIBRATION_SLOPE
-                self._draft[CONF_CALIBRATION_INTERCEPT] = DEFAULT_CALIBRATION_INTERCEPT
+                self._draft[CONF_THRESHOLD] = float(user_input.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
                 return await self.async_step_preview()
 
         default_states = dict(self._draft.get(CONF_FEATURE_STATES, {}))
@@ -283,42 +228,25 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             step_id="states",
             data_schema=_build_states_schema(required_features, default_states, default_threshold),
             errors=errors,
-            description_placeholders={
-                "states_help": ", ".join(required_features),
-            },
+            description_placeholders={"states_help": ", ".join(required_features)},
         )
 
-    async def async_step_preview(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Show confirmation before creating entry."""
+    async def async_step_preview(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None and bool(user_input.get("confirm")):
             return self.async_create_entry(
                 title=str(self._draft[CONF_NAME]),
                 data={
                     CONF_NAME: self._draft[CONF_NAME],
                     CONF_GOAL: self._draft[CONF_GOAL],
-                    CONF_MODEL_TYPE: self._draft[CONF_MODEL_TYPE],
                     CONF_REQUIRED_FEATURES: self._draft[CONF_REQUIRED_FEATURES],
                     CONF_FEATURE_TYPES: self._draft[CONF_FEATURE_TYPES],
                     CONF_FEATURE_STATES: self._draft[CONF_FEATURE_STATES],
                     CONF_STATE_MAPPINGS: self._draft[CONF_STATE_MAPPINGS],
                     CONF_THRESHOLD: self._draft[CONF_THRESHOLD],
-                    CONF_INTERCEPT: self._draft[CONF_INTERCEPT],
-                    CONF_COEFFICIENTS: self._draft[CONF_COEFFICIENTS],
-                    CONF_CALIBRATION_SLOPE: self._draft[CONF_CALIBRATION_SLOPE],
-                    CONF_CALIBRATION_INTERCEPT: self._draft[CONF_CALIBRATION_INTERCEPT],
-                    CONF_ML_DB_PATH: self._draft.get(CONF_ML_DB_PATH, ""),
-                    CONF_ML_ARTIFACT_VIEW: self._draft.get(
-                        CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW
-                    ),
-                    CONF_ML_FEATURE_SOURCE: self._draft.get(
-                        CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE
-                    ),
-                    CONF_ML_FEATURE_VIEW: self._draft.get(
-                        CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW
-                    ),
+                    CONF_ML_DB_PATH: self._draft[CONF_ML_DB_PATH],
+                    CONF_ML_ARTIFACT_VIEW: self._draft[CONF_ML_ARTIFACT_VIEW],
+                    CONF_ML_FEATURE_SOURCE: self._draft[CONF_ML_FEATURE_SOURCE],
+                    CONF_ML_FEATURE_VIEW: self._draft[CONF_ML_FEATURE_VIEW],
                 },
             )
 
@@ -328,15 +256,12 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
             description_placeholders={
                 "name": str(self._draft.get(CONF_NAME, "")),
                 "goal": str(self._draft.get(CONF_GOAL, "")),
-                "required_features": ", ".join(
-                    self._draft.get(CONF_REQUIRED_FEATURES, [])
-                ),
+                "required_features": ", ".join(self._draft.get(CONF_REQUIRED_FEATURES, [])),
             },
         )
 
     @staticmethod
     def async_get_options_flow(config_entry):
-        """Get options flow."""
         return ClrOptionsFlow(config_entry)
 
 
@@ -347,7 +272,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
         self._config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Show management sections."""
+        del user_input
         return self.async_show_menu(
             step_id="init",
             menu_options=[
@@ -360,32 +285,16 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             ],
         )
 
-    async def async_step_model(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Manage external ML artifact source settings."""
+    async def async_step_model(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             return self.async_create_entry(
                 title="",
                 data={
-                    CONF_MODEL_TYPE: str(
-                        user_input.get(CONF_MODEL_TYPE, DEFAULT_MODEL_TYPE)
-                    ).strip()
-                    or DEFAULT_MODEL_TYPE,
                     CONF_ML_DB_PATH: str(user_input.get(CONF_ML_DB_PATH, "")).strip(),
                     CONF_ML_ARTIFACT_VIEW: str(
                         user_input.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW)
                     ).strip()
                     or DEFAULT_ML_ARTIFACT_VIEW,
-                    CONF_ML_FEATURE_SOURCE: str(
-                        user_input.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE)
-                    ).strip()
-                    or DEFAULT_ML_FEATURE_SOURCE,
-                    CONF_ML_FEATURE_VIEW: str(
-                        user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
-                    ).strip()
-                    or DEFAULT_ML_FEATURE_VIEW,
                 },
             )
 
@@ -393,72 +302,21 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             CONF_ML_DB_PATH,
             self._config_entry.data.get(CONF_ML_DB_PATH, ""),
         )
-        default_model_type = self._config_entry.options.get(
-            CONF_MODEL_TYPE,
-            self._config_entry.data.get(CONF_MODEL_TYPE, DEFAULT_MODEL_TYPE),
-        )
         default_view = self._config_entry.options.get(
             CONF_ML_ARTIFACT_VIEW,
             self._config_entry.data.get(CONF_ML_ARTIFACT_VIEW, DEFAULT_ML_ARTIFACT_VIEW),
-        )
-        default_feature_source = self._config_entry.options.get(
-            CONF_ML_FEATURE_SOURCE,
-            self._config_entry.data.get(CONF_ML_FEATURE_SOURCE, DEFAULT_ML_FEATURE_SOURCE),
-        )
-        default_feature_view = self._config_entry.options.get(
-            CONF_ML_FEATURE_VIEW,
-            self._config_entry.data.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW),
         )
         return self.async_show_form(
             step_id="model",
             data_schema=vol.Schema(
                 {
-                    vol.Required(
-                        CONF_MODEL_TYPE, default=default_model_type
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(
-                                    value="lightgbm",
-                                    label="LightGBM (recommended)",
-                                ),
-                                selector.SelectOptionDict(
-                                    value="clr",
-                                    label="Calibrated Logistic Regression",
-                                ),
-                            ],
-                            mode=selector.SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                    vol.Optional(CONF_ML_DB_PATH, default=default_db_path): str,
+                    vol.Required(CONF_ML_DB_PATH, default=default_db_path): str,
                     vol.Required(CONF_ML_ARTIFACT_VIEW, default=default_view): str,
-                    vol.Required(
-                        CONF_ML_FEATURE_SOURCE, default=default_feature_source
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(
-                                    value="hass_state",
-                                    label="Home Assistant States",
-                                ),
-                                selector.SelectOptionDict(
-                                    value="ml_snapshot",
-                                    label="ML Snapshot View",
-                                ),
-                            ],
-                            mode=selector.SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                    vol.Required(CONF_ML_FEATURE_VIEW, default=default_feature_view): str,
                 }
             ),
         )
 
-    async def async_step_feature_source(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Manage runtime feature source settings."""
+    async def async_step_feature_source(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             return self.async_create_entry(
                 title="",
@@ -508,152 +366,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             ),
         )
 
-    async def async_step_decision(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Manage probability-to-decision settings."""
-        if user_input is not None:
-            return self.async_create_entry(
-                title="",
-                data={
-                    CONF_THRESHOLD: float(user_input[CONF_THRESHOLD]),
-                    CONF_CALIBRATION_SLOPE: float(user_input[CONF_CALIBRATION_SLOPE]),
-                    CONF_CALIBRATION_INTERCEPT: float(user_input[CONF_CALIBRATION_INTERCEPT]),
-                },
-            )
-
-        default_threshold = self._config_entry.options.get(
-            CONF_THRESHOLD,
-            self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
-        )
-        defaults_slope = self._config_entry.options.get(
-            CONF_CALIBRATION_SLOPE,
-            self._config_entry.data.get(CONF_CALIBRATION_SLOPE, DEFAULT_CALIBRATION_SLOPE),
-        )
-        defaults_intercept = self._config_entry.options.get(
-            CONF_CALIBRATION_INTERCEPT,
-            self._config_entry.data.get(
-                CONF_CALIBRATION_INTERCEPT,
-                DEFAULT_CALIBRATION_INTERCEPT,
-            ),
-        )
-        return self.async_show_form(
-            step_id="decision",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
-                    vol.Required(CONF_CALIBRATION_SLOPE, default=defaults_slope): vol.Coerce(float),
-                    vol.Required(
-                        CONF_CALIBRATION_INTERCEPT, default=defaults_intercept
-                    ): vol.Coerce(float),
-                }
-            ),
-        )
-
-    async def async_step_features(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Manage selected required features."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
-            if not required_features:
-                errors[CONF_REQUIRED_FEATURES] = "required"
-            else:
-                return self.async_create_entry(
-                    title="",
-                    data={CONF_REQUIRED_FEATURES: required_features},
-                )
-
-        defaults = self._config_entry.options.get(
-            CONF_REQUIRED_FEATURES,
-            self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
-        )
-        return self.async_show_form(
-            step_id="features",
-            data_schema=_build_features_schema(defaults),
-            errors=errors,
-            description_placeholders={
-                "features_help": "Pick entities to include as model features.",
-            },
-        )
-
-    async def async_step_mappings(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Manage categorical mappings."""
-        errors: dict[str, str] = {}
-        if user_input is not None:
-            state_mappings = parse_state_mappings(str(user_input.get(CONF_STATE_MAPPINGS, "{}")))
-            if state_mappings is None:
-                errors[CONF_STATE_MAPPINGS] = "invalid_state_mappings"
-            else:
-                return self.async_create_entry(
-                    title="",
-                    data={CONF_STATE_MAPPINGS: state_mappings},
-                )
-
-        defaults = self._config_entry.options.get(
-            CONF_STATE_MAPPINGS,
-            self._config_entry.data.get(CONF_STATE_MAPPINGS, {}),
-        )
-        return self.async_show_form(
-            step_id="mappings",
-            data_schema=_build_mappings_schema(json.dumps(defaults)),
-            errors=errors,
-        )
-
-    async def async_step_calibration(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Manage calibration settings."""
-        if user_input is not None:
-            return self.async_create_entry(
-                title="",
-                data={
-                    CONF_CALIBRATION_SLOPE: float(user_input[CONF_CALIBRATION_SLOPE]),
-                    CONF_CALIBRATION_INTERCEPT: float(
-                        user_input[CONF_CALIBRATION_INTERCEPT]
-                    ),
-                },
-            )
-
-        defaults_slope = self._config_entry.options.get(
-            CONF_CALIBRATION_SLOPE,
-            self._config_entry.data.get(
-                CONF_CALIBRATION_SLOPE,
-                DEFAULT_CALIBRATION_SLOPE,
-            ),
-        )
-        defaults_intercept = self._config_entry.options.get(
-            CONF_CALIBRATION_INTERCEPT,
-            self._config_entry.data.get(
-                CONF_CALIBRATION_INTERCEPT,
-                DEFAULT_CALIBRATION_INTERCEPT,
-            ),
-        )
-        return self.async_show_form(
-            step_id="calibration",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_CALIBRATION_SLOPE, default=defaults_slope): vol.Coerce(float),
-                    vol.Required(
-                        CONF_CALIBRATION_INTERCEPT,
-                        default=defaults_intercept,
-                    ): vol.Coerce(float),
-                }
-            ),
-        )
-
-    async def async_step_threshold(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Manage decision threshold."""
+    async def async_step_decision(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         if user_input is not None:
             return self.async_create_entry(
                 title="",
@@ -665,19 +378,50 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             self._config_entry.data.get(CONF_THRESHOLD, DEFAULT_THRESHOLD),
         )
         return self.async_show_form(
-            step_id="threshold",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float),
-                }
-            ),
+            step_id="decision",
+            data_schema=vol.Schema({vol.Required(CONF_THRESHOLD, default=default_threshold): vol.Coerce(float)}),
         )
 
-    async def async_step_diagnostics(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Read-only diagnostics hint step."""
+    async def async_step_features(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            required_features = parse_required_features(user_input[CONF_REQUIRED_FEATURES])
+            if not required_features:
+                errors[CONF_REQUIRED_FEATURES] = "required"
+            else:
+                return self.async_create_entry(title="", data={CONF_REQUIRED_FEATURES: required_features})
+
+        defaults = self._config_entry.options.get(
+            CONF_REQUIRED_FEATURES,
+            self._config_entry.data.get(CONF_REQUIRED_FEATURES, []),
+        )
+        return self.async_show_form(
+            step_id="features",
+            data_schema=_build_features_schema(defaults),
+            errors=errors,
+            description_placeholders={"features_help": "Pick entities to include as model features."},
+        )
+
+    async def async_step_mappings(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            state_mappings = parse_state_mappings(str(user_input.get(CONF_STATE_MAPPINGS, "{}")))
+            if state_mappings is None:
+                errors[CONF_STATE_MAPPINGS] = "invalid_state_mappings"
+            else:
+                return self.async_create_entry(title="", data={CONF_STATE_MAPPINGS: state_mappings})
+
+        defaults = self._config_entry.options.get(
+            CONF_STATE_MAPPINGS,
+            self._config_entry.data.get(CONF_STATE_MAPPINGS, {}),
+        )
+        return self.async_show_form(
+            step_id="mappings",
+            data_schema=_build_mappings_schema(json.dumps(defaults)),
+            errors=errors,
+        )
+
+    async def async_step_diagnostics(self, user_input: dict[str, Any] | None = None) -> FlowResult:
         del user_input
         return self.async_show_form(
             step_id="diagnostics",

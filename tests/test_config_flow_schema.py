@@ -9,7 +9,7 @@ from custom_components.calibrated_logistic_regression.config_flow import (
 )
 
 
-def test_user_schema_contains_name_and_goal() -> None:
+def test_user_schema_contains_name_goal_and_ml_settings() -> None:
     schema = _build_user_schema()
     keys = [str(k.schema) for k in schema.schema]
     assert "name" in keys
@@ -18,7 +18,6 @@ def test_user_schema_contains_name_and_goal() -> None:
     assert "ml_artifact_view" in keys
     assert "ml_feature_source" in keys
     assert "ml_feature_view" in keys
-    assert "model_type" in keys
 
 
 def test_features_schema_contains_required_features() -> None:

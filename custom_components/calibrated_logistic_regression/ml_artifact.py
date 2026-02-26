@@ -1,4 +1,4 @@
-"""SQLite CLR artifact loader for ML-data-layer integration."""
+"""SQLite LightGBM artifact loader for ML-data-layer integration."""
 
 from __future__ import annotations
 
@@ -9,18 +9,6 @@ from pathlib import Path
 import re
 
 from .const import DEFAULT_ML_ARTIFACT_VIEW
-
-
-@dataclass(slots=True)
-class ClrModelArtifact:
-    """Parsed CLR model artifact payload."""
-
-    intercept: float
-    coefficients: dict[str, float]
-    feature_names: list[str]
-    model_type: str
-    feature_set_version: str
-    created_at_utc: str | None
 
 
 @dataclass(slots=True)
@@ -59,33 +47,8 @@ def _load_latest_artifact_row(
         conn.close()
 
     if row is None:
-        raise ValueError("No CLR artifact row available")
+        raise ValueError("No LightGBM artifact row available")
     return row
-
-
-def load_latest_clr_model_artifact(
-    db_path: str,
-    artifact_view: str = DEFAULT_ML_ARTIFACT_VIEW,
-) -> ClrModelArtifact:
-    """Load and parse latest CLR model artifact from SQLite contract view."""
-    row = _load_latest_artifact_row(db_path=db_path, artifact_view=artifact_view)
-
-    payload = json.loads(row["artifact_json"])
-    model = dict(payload.get("model", {}))
-    feature_names = [str(name) for name in payload.get("feature_names", [])]
-    coefficients = [float(value) for value in model.get("coefficients", [])]
-    intercept = float(model.get("intercept", 0.0))
-    if len(feature_names) != len(coefficients):
-        raise ValueError("feature_names and coefficients length mismatch")
-
-    return ClrModelArtifact(
-        intercept=intercept,
-        coefficients={name: coef for name, coef in zip(feature_names, coefficients)},
-        feature_names=feature_names,
-        model_type=str(row["model_type"]),
-        feature_set_version=str(row["feature_set_version"]),
-        created_at_utc=row["created_at_utc"],
-    )
 
 
 def load_latest_lightgbm_model_artifact(

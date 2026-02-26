@@ -2,13 +2,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "Calibrated Logistic Regression",
-        "description": "Name the sensor and choose probability goal. Available goals: {goal_options}.",
+        "title": "MindML Probability Sensor",
+        "description": "Name the sensor, choose probability goal, and point to the ML artifact database.",
         "data": {
           "name": "Name",
           "goal": "Probability goal",
-          "model_type": "Model runtime",
-          "ml_db_path": "ML DB path (optional)",
+          "ml_db_path": "ML DB path",
           "ml_artifact_view": "ML artifact view",
           "ml_feature_source": "Runtime feature source",
           "ml_feature_view": "Feature snapshot view"
@@ -16,14 +15,14 @@
       },
       "features": {
         "title": "Select Features",
-        "description": "Choose entities used as model features. {features_help}",
+        "description": "Choose entities used as runtime features. {features_help}",
         "data": {
           "required_features": "Required features"
         }
       },
       "states": {
         "title": "Feature States",
-        "description": "Provide current states for each selected entity using the fields below. Selected features: {states_help}",
+        "description": "Provide current states for each selected entity. Selected features: {states_help}",
         "data": {
           "threshold": "Decision threshold (%)"
         }
@@ -57,39 +56,11 @@
           "diagnostics": "Diagnostics"
         }
       },
-      "features": {
-        "title": "Manage Features",
-        "data": {
-          "required_features": "Required features"
-        }
-      },
-      "mappings": {
-        "title": "Manage Mappings",
-        "data": {
-          "state_mappings": "State mappings JSON"
-        }
-      },
-      "calibration": {
-        "title": "Manage Calibration",
-        "data": {
-          "calibration_slope": "Calibration slope",
-          "calibration_intercept": "Calibration intercept"
-        }
-      },
-      "threshold": {
-        "title": "Manage Threshold",
-        "data": {
-          "threshold": "Decision threshold (%)"
-        }
-      },
       "model": {
         "title": "Model",
         "data": {
-          "model_type": "Model runtime",
-          "ml_db_path": "ML DB path (optional)",
-          "ml_artifact_view": "ML artifact view",
-          "ml_feature_source": "Runtime feature source",
-          "ml_feature_view": "Feature snapshot view"
+          "ml_db_path": "ML DB path",
+          "ml_artifact_view": "ML artifact view"
         }
       },
       "feature_source": {
@@ -102,9 +73,19 @@
       "decision": {
         "title": "Decision",
         "data": {
-          "threshold": "Decision threshold (%)",
-          "calibration_slope": "Calibration slope",
-          "calibration_intercept": "Calibration intercept"
+          "threshold": "Decision threshold (%)"
+        }
+      },
+      "features": {
+        "title": "Features",
+        "data": {
+          "required_features": "Required features"
+        }
+      },
+      "mappings": {
+        "title": "Mappings",
+        "data": {
+          "state_mappings": "State mappings JSON"
         }
       },
       "diagnostics": {

@@ -1,102 +1,65 @@
-# ML Probability Sensor (Home Assistant)
+# HA-MindML Sensor (Home Assistant)
 
-Custom integration that exposes a probability output as a Home Assistant sensor, with LightGBM runtime support and legacy CLR compatibility.
+Custom integration that exposes a LightGBM-based probability sensor in Home Assistant.
 
-## UX Highlights
+## Core Runtime Model
 
-- Multi-step setup wizard (instead of one raw JSON screen)
-- Guided post-setup management sections in options flow (`Model`, `Feature Source`, `Decision`)
-- Built-in categorical state mapping for non-numeric entities
-- Explainability attributes for runtime transparency and debugging
+Prediction always combines:
 
-## Setup Wizard Steps
+- **Model artifact** from ML DB (`model_provider`)
+- **Runtime feature values** from `feature_provider`
 
-1. **Name & Goal**: define sensor name and what probability represents.
-2. **Model Runtime**: choose `LightGBM` (default) or legacy `CLR`.
-2. **Features**: pick feature entities with the Home Assistant entity selector.
-3. **Mappings (if needed)**: review or override inferred mappings for categorical features.
-4. **Model**: provide intercept, coefficients, and calibration values.
-5. **Preview**: confirm before saving.
+Formula at runtime:
 
-## Management After Setup
+`probability_now = model.predict(features_now)`
 
-Open the integration options and choose:
+So this is not "model or states". It is model + feature source.
 
-- **Model**: select runtime and artifact source
-- **Feature Source**: choose real-time HA state mode or ML snapshot mode
-- **Decision**: tune threshold/calibration
-- **Features**: edit required feature entity IDs
-- **Mappings**: adjust categorical state-to-number mappings
-- **Diagnostics**: see feature coverage context
+## Feature Sources
 
-## Configuration Inputs (Stored)
+- `hass_state`: live HA states at scoring time (real-time updates)
+- `ml_snapshot`: latest feature snapshot from ML DB view
 
-- `name`: Sensor name
-- `goal`: Human-readable probability purpose
-- `required_features`: Feature entity IDs
-- `feature_types`: Auto-inferred feature typing map (`numeric` / `categorical`)
-- `state_mappings`: Optional map for categorical states
-- `intercept`: Model intercept
-- `coefficients`: Feature weight map
-- `calibration_slope`: Calibration slope (default `1.0`)
-- `calibration_intercept`: Calibration intercept (default `0.0`)
-- `model_type`: `lightgbm` (default) or `clr`
-- `ml_feature_source`: `hass_state` or `ml_snapshot`
-- `ml_feature_view`: snapshot view name for ML feature mode
+## Setup
 
-`state_mappings` example:
+Wizard collects:
 
-```json
-{
-  "binary_sensor.back_door": {"on": 1, "off": 0},
-  "climate.living_room_hvac_action": {"heating": 1, "idle": 0, "off": 0}
-}
-```
+1. Name and goal
+2. ML DB path + artifact view
+3. Runtime feature source
+4. Required features
+5. State mappings/threshold
+6. Preview and confirm
 
-## Runtime Explainability Attributes
+## Options (Entity Settings)
+
+- `Model`
+- `Feature Source`
+- `Decision`
+- `Features`
+- `Mappings`
+- `Diagnostics`
+
+## Key Stored Fields
+
+- `name`
+- `goal`
+- `required_features`
+- `feature_types`
+- `state_mappings`
+- `threshold`
+- `ml_db_path`
+- `ml_artifact_view`
+- `ml_feature_source`
+- `ml_feature_view`
+
+## Explainability Attributes
 
 - `raw_probability`
 - `linear_score`
 - `feature_values`
 - `feature_contributions`
-- `mapped_state_values`
 - `missing_features`
-- `unavailable_reason`
-- `last_computed_at`
-
-## Architecture (Refactor)
-
-The runtime pipeline is now split into three layers:
-
-- `model_provider`: loads coefficients/intercept from manual config or ML artifact contract view.
-- `feature_provider`: builds the feature vector from live HA states, optional history-derived runtime features, or ML latest-feature snapshot view.
-- `inference`: runtime strategy layer for both CLR and LightGBM-compatible scoring.
-
-This separation keeps the sensor entity focused on orchestration and makes it easier to evolve with `ha_ml_data_layer` contract changes.
-
-### ML Contract Mode
-
-When configured with:
-
-- `ml_db_path`
-- `ml_artifact_view` (default: `vw_clr_latest_model_artifact`)
-- `ml_feature_source = ml_snapshot`
-- `ml_feature_view` (default: `vw_latest_feature_snapshot`)
-
-the sensor can pull both model artifacts and runtime features from the ML data-layer SQLite contract views.
-
-## Setup Guidance
-
-- Goal options are selectable in the wizard: `risk`, `event_probability`, `success_probability`.
-- Feature selection uses a native entity picker to avoid typing mistakes.
-- Feature types are inferred automatically from current states.
-- Common categorical mappings (`on/off`, `home/away`, `open/closed`) are inferred automatically.
-- Mapping and coefficient steps include inline JSON examples in the UI.
-
-## Sensor Behavior
-
-- State is calibrated probability in percent (`0-100`).
-- Numeric source states are used directly.
-- Categorical states use `state_mappings`.
-- Sensor becomes unavailable if required features are missing/unmapped.
-- Sensor updates whenever required feature entities change state.
+- `model_source`
+- `feature_source`
+- `decision`

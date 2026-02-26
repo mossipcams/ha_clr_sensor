@@ -12,36 +12,21 @@ sys.modules.setdefault("homeassistant", homeassistant)
 sys.modules.setdefault("homeassistant.config_entries", config_entries)
 sys.modules.setdefault("homeassistant.core", core)
 
-from custom_components.calibrated_logistic_regression.ml_artifact import ClrModelArtifact
+from custom_components.calibrated_logistic_regression.ml_artifact import LightGBMModelArtifact
 from custom_components.calibrated_logistic_regression.model_provider import (
-    ManualModelProvider,
-    SqliteArtifactModelProvider,
+    SqliteLightGBMModelProvider,
 )
 
 
-def test_manual_model_provider_returns_manual_model() -> None:
-    provider = ManualModelProvider(intercept=0.5, coefficients={"sensor.a": 1.25})
-
-    result = provider.load()
-
-    assert result.source == "manual"
-    assert result.model.intercept == 0.5
-    assert result.model.coefficients == {"sensor.a": 1.25}
-    assert result.artifact_error is None
-    assert result.artifact_meta == {}
-
-
-def test_sqlite_model_provider_returns_ml_artifact_model() -> None:
-    provider = SqliteArtifactModelProvider(
+def test_sqlite_lightgbm_model_provider_returns_ml_artifact_model() -> None:
+    provider = SqliteLightGBMModelProvider(
         db_path="/tmp/ha_ml_data_layer.db",
         artifact_view="vw_clr_latest_model_artifact",
-        fallback_intercept=0.0,
-        fallback_coefficients={"sensor.a": 0.0},
-        artifact_loader=lambda db_path, artifact_view: ClrModelArtifact(
-            intercept=-1.0,
-            coefficients={"sensor.a": 2.0},
-            feature_names=["sensor.a"],
-            model_type="sklearn_logistic_regression",
+        fallback_feature_names=["event_count"],
+        artifact_loader=lambda db_path, artifact_view: LightGBMModelArtifact(
+            model_payload={"intercept": -1.0, "weights": [2.0]},
+            feature_names=["event_count"],
+            model_type="lightgbm_binary_classifier",
             feature_set_version="v1",
             created_at_utc="2026-02-25T12:00:00+00:00",
         ),
@@ -50,28 +35,23 @@ def test_sqlite_model_provider_returns_ml_artifact_model() -> None:
     result = provider.load()
 
     assert result.source == "ml_data_layer"
-    assert result.model.intercept == -1.0
-    assert result.model.coefficients == {"sensor.a": 2.0}
+    assert result.model.feature_names == ["event_count"]
+    assert result.model.model_payload == {"intercept": -1.0, "weights": [2.0]}
     assert result.artifact_error is None
-    assert result.artifact_meta["model_type"] == "sklearn_logistic_regression"
-    assert result.artifact_meta["artifact_view"] == "vw_clr_latest_model_artifact"
+    assert result.artifact_meta["model_type"] == "lightgbm_binary_classifier"
 
 
-def test_sqlite_model_provider_falls_back_to_manual_when_loader_fails() -> None:
-    provider = SqliteArtifactModelProvider(
+def test_sqlite_lightgbm_model_provider_falls_back_when_loader_fails() -> None:
+    provider = SqliteLightGBMModelProvider(
         db_path="/tmp/ha_ml_data_layer.db",
         artifact_view="vw_clr_latest_model_artifact",
-        fallback_intercept=0.75,
-        fallback_coefficients={"sensor.a": 0.1},
-        artifact_loader=lambda db_path, artifact_view: (_ for _ in ()).throw(
-            ValueError("bad artifact")
-        ),
+        fallback_feature_names=["event_count"],
+        artifact_loader=lambda db_path, artifact_view: (_ for _ in ()).throw(ValueError("bad artifact")),
     )
 
     result = provider.load()
 
     assert result.source == "manual"
-    assert result.model.intercept == 0.75
-    assert result.model.coefficients == {"sensor.a": 0.1}
+    assert result.model.feature_names == ["event_count"]
+    assert result.model.model_payload["weights"] == [0.0]
     assert result.artifact_error == "bad artifact"
-    assert result.artifact_meta == {}
