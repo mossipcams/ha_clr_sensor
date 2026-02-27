@@ -71,6 +71,10 @@ def _install_homeassistant_stubs() -> None:
             self.state = state
 
     class SensorEntity:
+        @property
+        def available(self) -> bool:
+            return True
+
         async def async_added_to_hass(self) -> None:
             return None
 

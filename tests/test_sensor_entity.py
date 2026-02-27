@@ -73,7 +73,7 @@ def test_sensor_unavailable_reason_when_required_feature_missing(monkeypatch) ->
     sensor = CalibratedLogisticRegressionSensor(hass, _build_entry())
     sensor._recompute_state(datetime.now())
 
-    assert sensor.available is False
+    assert sensor.available is True
     attrs = sensor.extra_state_attributes
     assert attrs["missing_features"] == ["sensor.b"]
     assert attrs["unavailable_reason"] == "missing_or_unmapped_features"
@@ -282,7 +282,7 @@ def test_sensor_handles_no_previous_state(monkeypatch) -> None:
     asyncio.run(sensor.async_added_to_hass())
 
     assert sensor.native_value is None
-    assert sensor.available is False
+    assert sensor.available is True
 
 
 def test_sensor_surfaces_model_artifact_error_reason(monkeypatch) -> None:
@@ -316,6 +316,6 @@ def test_sensor_surfaces_model_artifact_error_reason(monkeypatch) -> None:
     sensor._recompute_state(datetime.now())
 
     attrs = sensor.extra_state_attributes
-    assert sensor.available is False
+    assert sensor.available is True
     assert attrs["model_artifact_error"] is not None
     assert attrs["unavailable_reason"] == "model_artifact_error"

@@ -127,7 +127,6 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         self._attr_suggested_display_precision = 2
         self._attr_should_poll = self._ml_feature_source == "ml_snapshot"
 
-        self._available = False
         self._native_value: float | None = None
         self._raw_probability: float | None = None
         self._linear_score: float | None = None
@@ -148,7 +147,6 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         if last_state is not None and last_state.state not in (None, "unknown", "unavailable"):
             try:
                 self._native_value = float(last_state.state)
-                self._available = True
             except (TypeError, ValueError):
                 pass
             attrs = last_state.attributes or {}
@@ -186,9 +184,6 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         """Refresh state when polling is enabled."""
         self._recompute_state(datetime.now(UTC))
 
-    @property
-    def available(self) -> bool:
-        return self._available
 
     @property
     def native_value(self) -> float | None:
@@ -231,7 +226,6 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             self._missing_features = list(self._required_features)
             self._last_computed_at = now.astimezone(UTC).isoformat()
             self._feature_provider_error = str(exc)
-            self._available = False
             self._native_value = None
             self._raw_probability = None
             self._linear_score = None
@@ -253,7 +247,6 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             model=self._model,
             threshold=self._threshold,
         )
-        self._available = result.available
         self._native_value = result.native_value
         self._raw_probability = result.raw_probability
         self._linear_score = result.linear_score
@@ -277,7 +270,6 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         domain_data = self.hass.data.setdefault(DOMAIN, {})
         entry_data = domain_data.setdefault(self._entry_id, {})
         entry_data["runtime"] = {
-            "available": self._available,
             "feature_source": self._ml_feature_source,
             "missing_features": list(self._missing_features),
             "unavailable_reason": self._unavailable_reason,
