@@ -24,7 +24,7 @@ def test_sqlite_lightgbm_model_provider_returns_ml_artifact_model() -> None:
         artifact_view="vw_clr_latest_model_artifact",
         fallback_feature_names=["event_count"],
         artifact_loader=lambda db_path, artifact_view: LightGBMModelArtifact(
-            model_payload={"intercept": -1.0, "weights": [2.0]},
+            model_payload={"booster_model_str": "serialized-booster"},
             feature_names=["event_count"],
             model_type="lightgbm_binary_classifier",
             feature_set_version="v1",
@@ -36,7 +36,7 @@ def test_sqlite_lightgbm_model_provider_returns_ml_artifact_model() -> None:
 
     assert result.source == "ml_data_layer"
     assert result.model.feature_names == ["event_count"]
-    assert result.model.model_payload == {"intercept": -1.0, "weights": [2.0]}
+    assert result.model.model_payload == {"booster_model_str": "serialized-booster"}
     assert result.artifact_error is None
     assert result.artifact_meta["model_type"] == "lightgbm_binary_classifier"
 
@@ -53,5 +53,5 @@ def test_sqlite_lightgbm_model_provider_falls_back_when_loader_fails() -> None:
 
     assert result.source == "manual"
     assert result.model.feature_names == ["event_count"]
-    assert result.model.model_payload["weights"] == [0.0]
+    assert result.model.model_payload == {}
     assert result.artifact_error == "bad artifact"

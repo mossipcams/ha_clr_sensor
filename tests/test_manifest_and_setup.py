@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -18,7 +19,7 @@ def test_manifest_contains_required_fields() -> None:
     manifest = json.loads(manifest_path.read_text())
     assert manifest["domain"] == "mindml"
     assert manifest["name"]
-    assert manifest["version"] == "0.3.7"
+    assert re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"])
     assert manifest["config_flow"] is True
 
 

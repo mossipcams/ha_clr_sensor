@@ -58,7 +58,7 @@ class SqliteLightGBMModelProvider:
         except Exception as exc:  # pragma: no cover - runtime fallback guard
             fallback = LightGBMModelSpec(
                 feature_names=list(self._fallback_feature_names),
-                model_payload={"intercept": 0.0, "weights": [0.0] * len(self._fallback_feature_names)},
+                model_payload={},
             )
             return ModelProviderResult(
                 model=fallback,
