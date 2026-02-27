@@ -80,3 +80,27 @@ def test_user_step_shows_error_when_blank_db_resolves_to_missing_path(monkeypatc
     assert result["type"] == "form"
     assert result["step_id"] == "user"
     assert result["errors"]["ml_db_path"] == "db_not_found"
+
+
+def test_user_step_accepts_config_appdaemon_db_path(monkeypatch) -> None:
+    flow = CalibratedLogisticRegressionConfigFlow()
+    flow.hass = MagicMock()
+    flow._async_current_entries = MagicMock(return_value=[])
+    target_path = "/config/appdaemon/ha_ml_data_layer.db"
+    monkeypatch.setattr(
+        "custom_components.mindml.config_flow.os.path.isfile",
+        lambda path: str(path) == target_path,
+    )
+
+    result = asyncio.run(
+        flow.async_step_user(
+            {
+                "name": "Test Sensor",
+                "goal": "risk",
+                "ml_db_path": target_path,
+            }
+        )
+    )
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "features"

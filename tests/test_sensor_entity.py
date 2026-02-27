@@ -153,7 +153,7 @@ def test_sensor_resolves_default_ml_db_path_when_missing(monkeypatch) -> None:
 
     sensor = CalibratedLogisticRegressionSensor(hass, entry)
 
-    assert _Provider.last_kwargs["db_path"] == "/homeassistant/appdaemon/ha_ml_data_layer.db"
+    assert _Provider.last_kwargs["db_path"] == "/config/appdaemon/ha_ml_data_layer.db"
     assert sensor.extra_state_attributes["model_runtime"] == "lightgbm"
 
 
