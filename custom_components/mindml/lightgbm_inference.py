@@ -56,6 +56,18 @@ def run_lightgbm_inference(
     if isinstance(booster_model_str, str) and booster_model_str.strip():
         try:
             lightgbm = import_module("lightgbm")
+        except ModuleNotFoundError:
+            return InferenceResult(
+                available=False,
+                native_value=None,
+                raw_probability=None,
+                linear_score=None,
+                feature_contributions={},
+                unavailable_reason="lightgbm_not_installed",
+                is_above_threshold=None,
+                decision=None,
+            )
+        try:
             booster = lightgbm.Booster(model_str=booster_model_str)
             raw_probability = float(booster.predict(ordered_row)[0])
             linear_score = float(booster.predict(ordered_row, raw_score=True)[0])

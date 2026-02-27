@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
 
 from .lightgbm_inference import LightGBMModelSpec
@@ -35,8 +37,35 @@ class SqliteLightGBMModelProvider:
         self._fallback_feature_names = list(fallback_feature_names)
         self._artifact_loader = artifact_loader
 
+    def _validate_contract_version(self) -> str | None:
+        db_file = Path(self._db_path)
+        if not db_file.exists():
+            return None
+        conn = sqlite3.connect(db_file)
+        conn.row_factory = sqlite3.Row
+        try:
+            row = conn.execute(
+                "SELECT value FROM metadata WHERE key = 'contract_version'"
+            ).fetchone()
+        except sqlite3.Error as exc:
+            return f"contract_version check failed: {exc}"
+        finally:
+            conn.close()
+        if row is None:
+            return "contract_version check failed: metadata key missing"
+        contract_version = str(row["value"])
+        if contract_version != "2":
+            return (
+                "contract_version mismatch: expected 2 "
+                f"but found {contract_version}"
+            )
+        return None
+
     def load(self) -> ModelProviderResult:
         try:
+            contract_error = self._validate_contract_version()
+            if contract_error is not None:
+                raise ValueError(contract_error)
             artifact = self._artifact_loader(self._db_path, self._artifact_view)
             model = LightGBMModelSpec(
                 feature_names=list(artifact.feature_names),

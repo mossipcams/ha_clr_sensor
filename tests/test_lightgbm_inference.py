@@ -90,6 +90,27 @@ def test_lightgbm_inference_returns_unavailable_when_booster_runtime_fails(monke
     assert result.unavailable_reason == "lightgbm_inference_error"
 
 
+def test_lightgbm_inference_returns_unavailable_when_lightgbm_missing(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "custom_components.mindml.lightgbm_inference.import_module",
+        lambda _: (_ for _ in ()).throw(ModuleNotFoundError("lightgbm")),
+    )
+
+    result = run_lightgbm_inference(
+        feature_values={"event_count": 4.0, "on_ratio": 0.5},
+        missing_features=[],
+        model=LightGBMModelSpec(
+            feature_names=["event_count", "on_ratio"],
+            model_payload={"booster_model_str": "serialized-booster"},
+        ),
+        threshold=50.0,
+    )
+
+    assert result.available is False
+    assert result.native_value is None
+    assert result.unavailable_reason == "lightgbm_not_installed"
+
+
 def test_lightgbm_inference_returns_unavailable_when_model_payload_missing() -> None:
     result = run_lightgbm_inference(
         feature_values={"event_count": 4.0, "on_ratio": 0.5},

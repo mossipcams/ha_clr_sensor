@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sqlite3
 import sys
 import types
+from pathlib import Path
 
 homeassistant = types.ModuleType("homeassistant")
 config_entries = types.ModuleType("homeassistant.config_entries")
@@ -55,3 +57,42 @@ def test_sqlite_lightgbm_model_provider_falls_back_when_loader_fails() -> None:
     assert result.model.feature_names == ["event_count"]
     assert result.model.model_payload == {}
     assert result.artifact_error == "bad artifact"
+
+
+def test_sqlite_lightgbm_model_provider_rejects_mismatched_contract_version(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "ha_ml_data_layer.db"
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            CREATE TABLE metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at_utc TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            INSERT INTO metadata(key, value, updated_at_utc)
+            VALUES ('contract_version', '999', '2026-02-27T00:00:00+00:00')
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    provider = SqliteLightGBMModelProvider(
+        db_path=str(db_path),
+        artifact_view="vw_lightgbm_latest_model_artifact",
+        fallback_feature_names=["event_count"],
+    )
+    result = provider.load()
+
+    assert result.source == "manual"
+    assert result.model.feature_names == ["event_count"]
+    assert result.model.model_payload == {}
+    assert result.artifact_error is not None
+    assert "contract_version" in result.artifact_error
