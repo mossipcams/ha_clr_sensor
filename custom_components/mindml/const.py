@@ -21,7 +21,7 @@ DEFAULT_ML_ARTIFACT_VIEW = "vw_lightgbm_latest_model_artifact"
 DEFAULT_ML_FEATURE_SOURCE = "hass_state"
 DEFAULT_ML_FEATURE_VIEW = "vw_latest_feature_snapshot"
 DEFAULT_ML_DB_FILENAME = "ha_ml_data_layer.db"
-DEFAULT_ML_DB_PATH = "/addon_configs/a0d7b954_appdaemon/appdaemon/ha_ml_data_layer.db"
+DEFAULT_ML_DB_PATH = "/homeassistant/appdaemon/ha_ml_data_layer.db"
 
 DEFAULT_GOAL = "risk"
 DEFAULT_THRESHOLD = 50.0

@@ -371,7 +371,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             step_id="model",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_ML_DB_PATH, default=default_db_path): str,
+                    vol.Optional(CONF_ML_DB_PATH, default=default_db_path): str,
                     vol.Required(CONF_ML_ARTIFACT_VIEW, default=default_view): str,
                 }
             ),

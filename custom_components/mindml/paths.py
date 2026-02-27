@@ -14,7 +14,7 @@ def resolve_ml_db_path(hass: Any, configured_path: object) -> str:
     if raw_path:
         return raw_path
 
-    candidates: list[Path] = []
+    candidates: list[Path] = [Path(DEFAULT_ML_DB_PATH)]
     config_base = None
     try:
         config_base = hass.config.path() if hass is not None else None
