@@ -13,6 +13,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     CONF_BED_PRESENCE_ENTITY,
+    CONF_ROLLING_WINDOW_HOURS,
     CONF_FEATURE_TYPES,
     CONF_FEATURE_STATES,
     CONF_GOAL,
@@ -25,6 +26,7 @@ from .const import (
     CONF_STATE_MAPPINGS,
     CONF_THRESHOLD,
     DEFAULT_GOAL,
+    DEFAULT_ROLLING_WINDOW_HOURS,
     DEFAULT_ML_ARTIFACT_VIEW,
     DEFAULT_ML_FEATURE_SOURCE,
     DEFAULT_ML_FEATURE_VIEW,
@@ -107,6 +109,7 @@ def _build_user_schema() -> vol.Schema:
             vol.Optional(CONF_BED_PRESENCE_ENTITY, default=""): selector.EntitySelector(
                 selector.EntitySelectorConfig(multiple=False)
             ),
+            vol.Optional(CONF_ROLLING_WINDOW_HOURS, default=DEFAULT_ROLLING_WINDOW_HOURS): vol.Coerce(float),
         }
     )
 
@@ -187,6 +190,9 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 self._draft[CONF_BED_PRESENCE_ENTITY] = str(
                     user_input.get(CONF_BED_PRESENCE_ENTITY, "")
                 ).strip()
+                self._draft[CONF_ROLLING_WINDOW_HOURS] = float(
+                    user_input.get(CONF_ROLLING_WINDOW_HOURS, DEFAULT_ROLLING_WINDOW_HOURS)
+                )
                 self._draft[_DRAFT_FEATURE_PAIRS] = []
                 return await self.async_step_features()
 
@@ -284,6 +290,7 @@ class CalibratedLogisticRegressionConfigFlow(config_entries.ConfigFlow, domain=D
                 CONF_ML_FEATURE_SOURCE: self._draft[CONF_ML_FEATURE_SOURCE],
                 CONF_ML_FEATURE_VIEW: self._draft[CONF_ML_FEATURE_VIEW],
                 CONF_BED_PRESENCE_ENTITY: self._draft[CONF_BED_PRESENCE_ENTITY],
+                CONF_ROLLING_WINDOW_HOURS: self._draft.get(CONF_ROLLING_WINDOW_HOURS, DEFAULT_ROLLING_WINDOW_HOURS),
             },
         )
 
@@ -329,6 +336,9 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
             CONF_BED_PRESENCE_ENTITY: str(
                 self._existing_value(CONF_BED_PRESENCE_ENTITY, "")
             ).strip(),
+            CONF_ROLLING_WINDOW_HOURS: float(
+                self._existing_value(CONF_ROLLING_WINDOW_HOURS, DEFAULT_ROLLING_WINDOW_HOURS)
+            ),
         }
         merged.update(dict(self._config_entry.options))
         merged.update(updates)
@@ -432,6 +442,7 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                     vol.Required(CONF_ML_ARTIFACT_VIEW, default=default_view): str,
                     vol.Optional(
                         CONF_BED_PRESENCE_ENTITY,
+    CONF_ROLLING_WINDOW_HOURS,
                         default=default_bed_presence_entity,
                     ): selector.EntitySelector(selector.EntitySelectorConfig(multiple=False)),
                 }
@@ -453,6 +464,9 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                             user_input.get(CONF_ML_FEATURE_VIEW, DEFAULT_ML_FEATURE_VIEW)
                         ).strip()
                         or DEFAULT_ML_FEATURE_VIEW,
+                        CONF_ROLLING_WINDOW_HOURS: float(
+                            user_input.get(CONF_ROLLING_WINDOW_HOURS, DEFAULT_ROLLING_WINDOW_HOURS)
+                        ),
                     }
                 ),
             )
@@ -487,6 +501,10 @@ class ClrOptionsFlow(config_entries.OptionsFlow):
                         )
                     ),
                     vol.Required(CONF_ML_FEATURE_VIEW, default=default_feature_view): str,
+                    vol.Optional(
+                        CONF_ROLLING_WINDOW_HOURS,
+                        default=float(self._existing_value(CONF_ROLLING_WINDOW_HOURS, DEFAULT_ROLLING_WINDOW_HOURS)),
+                    ): vol.Coerce(float),
                 }
             ),
         )

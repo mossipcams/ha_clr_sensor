@@ -17,6 +17,7 @@ CONF_ML_ARTIFACT_VIEW = "ml_artifact_view"
 CONF_ML_FEATURE_SOURCE = "ml_feature_source"
 CONF_ML_FEATURE_VIEW = "ml_feature_view"
 CONF_BED_PRESENCE_ENTITY = "bed_presence_entity"
+CONF_ROLLING_WINDOW_HOURS = "rolling_window_hours"
 
 DEFAULT_ML_ARTIFACT_VIEW = "vw_lightgbm_latest_model_artifact"
 DEFAULT_ML_FEATURE_SOURCE = "hass_state"
@@ -26,3 +27,4 @@ DEFAULT_ML_DB_PATH = "/config/appdaemon/ha_ml_data_layer.db"
 
 DEFAULT_GOAL = "risk"
 DEFAULT_THRESHOLD = 50.0
+DEFAULT_ROLLING_WINDOW_HOURS = 7.0

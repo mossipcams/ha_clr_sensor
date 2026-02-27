@@ -11,7 +11,8 @@
           "ml_artifact_view": "ML artifact view",
           "ml_feature_source": "Runtime feature source",
           "ml_feature_view": "Feature snapshot view",
-          "bed_presence_entity": "Bed Presence Entity"
+          "bed_presence_entity": "Bed Presence Entity",
+          "rolling_window_hours": "Rolling window (hours)"
         }
       },
       "features": {
@@ -57,7 +58,8 @@
         "title": "Feature Source",
         "data": {
           "ml_feature_source": "Runtime feature source",
-          "ml_feature_view": "Feature snapshot view"
+          "ml_feature_view": "Feature snapshot view",
+          "rolling_window_hours": "Rolling window (hours)"
         }
       },
       "decision": {

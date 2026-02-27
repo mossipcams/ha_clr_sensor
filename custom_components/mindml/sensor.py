@@ -14,6 +14,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import (
     CONF_BED_PRESENCE_ENTITY,
+    CONF_ROLLING_WINDOW_HOURS,
     CONF_FEATURE_STATES,
     CONF_FEATURE_TYPES,
     CONF_ML_ARTIFACT_VIEW,
@@ -25,12 +26,14 @@ from .const import (
     CONF_STATE_MAPPINGS,
     CONF_THRESHOLD,
     DEFAULT_ML_ARTIFACT_VIEW,
+    DEFAULT_ROLLING_WINDOW_HOURS,
     DEFAULT_ML_FEATURE_SOURCE,
     DEFAULT_ML_FEATURE_VIEW,
     DEFAULT_THRESHOLD,
     DOMAIN,
 )
 from .feature_provider import RealtimeHistoryFeatureProvider, SqliteSnapshotFeatureProvider
+from .rolling_window import RollingWindowTracker
 from .ingestion_rules import sync_ingestion_rules
 from .lightgbm_inference import LightGBMModelSpec, run_lightgbm_inference
 from .model_provider import ModelProviderResult, SqliteLightGBMModelProvider
@@ -90,7 +93,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
         self._ingestion_sync_error: str | None = None
         self._ingestion_rules_count: int = 0
 
-        feature_states = {
+        self._feature_states = {
             str(entity_id): str(state)
             for entity_id, state in dict(config.get(CONF_FEATURE_STATES, {})).items()
         }
@@ -98,7 +101,7 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             self._ingestion_rules_count = sync_ingestion_rules(
                 db_path=self._ml_db_path,
                 source=f"mindml:{self._entry_id}",
-                feature_states=feature_states,
+                feature_states=self._feature_states,
             )
         except Exception as exc:  # pragma: no cover - diagnostics-only
             self._ingestion_sync_error = str(exc)
@@ -123,6 +126,9 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
 
         self._threshold = float(config.get(CONF_THRESHOLD, DEFAULT_THRESHOLD))
 
+        self._rolling_window_tracker = None
+        self._rolling_window_hours = float(config.get(CONF_ROLLING_WINDOW_HOURS, DEFAULT_ROLLING_WINDOW_HOURS))
+
         if self._ml_feature_source == "ml_snapshot" and self._ml_db_path:
             self._feature_provider = SqliteSnapshotFeatureProvider(
                 db_path=self._ml_db_path,
@@ -131,14 +137,16 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             )
         else:
             self._ml_feature_source = "hass_state"
+            self._rolling_window_tracker = RollingWindowTracker(
+                window_hours=self._rolling_window_hours,
+                feature_states=self._feature_states,
+            )
             self._feature_provider = RealtimeHistoryFeatureProvider(
                 hass=self.hass,
                 required_features=self._required_features,
                 feature_types=self._feature_types,
                 state_mappings=self._state_mappings,
-                # Computed features (event_count, on_ratio) are not available via HA state.
-                # Users needing data-layer features should use ml_snapshot mode.
-                history_feature_loader=lambda required: {},
+                history_feature_loader=self._rolling_window_tracker.compute_features,
             )
 
         self._attr_name = self._name
@@ -182,11 +190,19 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             self._decision = attrs.get("decision")
 
         if self._ml_feature_source == "hass_state":
-            watched_entities = list(dict.fromkeys(self._required_features))
+            watched_entities = list(dict.fromkeys(
+                list(self._required_features) + list(self._feature_states.keys())
+            ))
 
             @callback
             def _handle_state_change(event: Event) -> None:
-                del event
+                if self._rolling_window_tracker is not None:
+                    entity_id = event.data.get("entity_id", "")
+                    new_state = event.data.get("new_state")
+                    if new_state is not None:
+                        self._rolling_window_tracker.record_event(
+                            entity_id, new_state.state
+                        )
                 self._recompute_state(datetime.now(UTC))
                 self.async_write_ha_state()
 
@@ -235,6 +251,8 @@ class CalibratedLogisticRegressionSensor(SensorEntity, RestoreEntity):
             "feature_source": self._ml_feature_source,
             "feature_view": self._ml_feature_view,
             "bed_presence_entity": self._bed_presence_entity,
+            "rolling_window_hours": self._rolling_window_hours,
+            "rolling_window_event_count": self._rolling_window_tracker.event_count if self._rolling_window_tracker else None,
             "ingestion_rules_count": self._ingestion_rules_count,
             "ingestion_sync_error": self._ingestion_sync_error,
             "training_status": self._training_result.get("status"),
